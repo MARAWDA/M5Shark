@@ -21,7 +21,11 @@
 #endif
 
 #ifdef HAS_CAP_TOUCH
-  #include "ft6336.h"
+  #ifdef HAS_CST3530
+    #include "cst3530.h"
+  #else
+    #include "ft6336.h"
+  #endif
 #endif
 
 // WiFi stuff

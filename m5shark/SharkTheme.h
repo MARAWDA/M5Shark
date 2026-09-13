@@ -91,7 +91,7 @@
     uint8_t  style;        // SharkStyle: menu-tile look for this theme
   };
 
-  #define SHARK_THEME_COUNT 4
+  #define SHARK_THEME_COUNT 10
 
   extern const SharkThemeDef shark_themes[SHARK_THEME_COUNT];
   extern const SharkThemeDef* shark_theme;

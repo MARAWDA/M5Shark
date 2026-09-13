@@ -100,6 +100,7 @@ class SharkWeb {
     String toolListJson();
     String cardJson();
     String wifiScanJson();
+    String guardianJson();
     void refreshScanCache();
 
     volatile int pending_mode = -1;

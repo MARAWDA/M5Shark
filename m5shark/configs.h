@@ -30,16 +30,40 @@
   //#define MARAUDER_CYD_GUITION // ESP32-2432S024 GUITION
   //#define MARAUDER_CYD_3_5_INCH
   //#define MARAUDER_C5
+  //#define MARAUDER_HOSYOND_35        // Hosyond 3.5in ESP32/ST7796U/resistive CYD
+  //#define MARAUDER_WAVESHARE_C5_28   // Waveshare ESP32-C5/ST7789/CST3530 CYD
   //#define MARAUDER_CARDPUTER
   //#define MARAUDER_CARDPUTER_ADV
-  #define MARAUDER_V8 // M5 SHARK v8 release target
+  // Default to the production M5SHARK target when no port was supplied by the
+  // build command. Port builds define their board macro automatically.
+  #if !defined(MARAUDER_HOSYOND_35) && !defined(MARAUDER_WAVESHARE_C5_28)
+    #define MARAUDER_V8 // M5 SHARK v8 release target
+  #endif
   //#define MARAUDER_PANCAKE
   //#define MARAUDER_MINI_V3
   //#define MARAUDER_M5_NANO_C6
   //#define DUAL_MINI_C5
   //// END BOARD TARGETS
 
+  // These aliases reuse the existing board feature families while keeping the
+  // two new hardware names explicit in build documentation and pin sections.
+  #if defined(MARAUDER_HOSYOND_35) && defined(MARAUDER_WAVESHARE_C5_28)
+    #error "Select only one display target"
+  #endif
+  #if defined(MARAUDER_HOSYOND_35)
+    #define MARAUDER_CYD_3_5_INCH
+  #endif
+  #if defined(MARAUDER_WAVESHARE_C5_28)
+    #define MARAUDER_C5
+  #endif
+
   #define JSON_SETTING_SIZE 2048
+
+  // Optional external radio module support used by the RF toolbox.
+  // Enable these if your board has the matching external RF/NFC module on the SPI bus.
+  #define HAS_NRF24
+  #define HAS_CC1101
+  #define HAS_PN532
 
 // Product version identity. M5SHARK is a full modification of the
 // ESP32Marauder v1.15.0 engine by justcallmekoko -- that credit is kept in
@@ -109,6 +133,10 @@
     #define HARDWARE_NAME "Flipper Zero Dev Board Pro"
   #elif defined(XIAO_ESP32_S3)
     #define HARDWARE_NAME "XIAO ESP32 S3"
+  #elif defined(MARAUDER_WAVESHARE_C5_28)
+    #define HARDWARE_NAME "Waveshare ESP32-C5 Touch LCD 2.8"
+  #elif defined(MARAUDER_HOSYOND_35)
+    #define HARDWARE_NAME "Hosyond ESP32 3.5 ST7796U"
   #elif defined(MARAUDER_C5)
     #define HARDWARE_NAME "ESP32-C5 DevKit"
   #elif defined(MARAUDER_V8)
@@ -148,6 +176,7 @@
     #define HAS_SCREEN
     #define HAS_MINI_SCREEN
     #define HAS_SD
+    #define HAS_C5_SD
     #define USE_SD
     #define HAS_TEMP_SENSOR
     #define HAS_GPS
@@ -518,6 +547,23 @@
     #define HAS_DUAL_BAND
     //#define HAS_PSRAM
     //#define HAS_TEMP_SENSOR
+    #define HAS_NIMBLE_2
+    #define HAS_IDF_3
+    #define HAS_DIRECT_UPLOAD
+  #endif
+
+  #ifdef MARAUDER_WAVESHARE_C5_28
+    #define HAS_SCREEN
+    #define HAS_FULL_SCREEN
+    #define HAS_SD
+    #define HAS_C5_SD
+    #define USE_SD
+    #define HAS_DUAL_BAND
+    #define HAS_PSRAM
+    #define HAS_TOUCH
+    #define HAS_CAP_TOUCH
+    #define HAS_CST3530
+    #define HAS_BT
     #define HAS_NIMBLE_2
     #define HAS_IDF_3
     #define HAS_DIRECT_UPLOAD
@@ -988,6 +1034,50 @@
     
       #define STATUSBAR_COLOR 0x4A49
 
+    #endif
+
+    #ifdef MARAUDER_WAVESHARE_C5_28
+      #define CHAN_PER_PAGE 7
+      #define SCREEN_CHAR_WIDTH 40
+      #define HAS_ILI9341
+      #define HAS_ST7789
+      #define BANNER_TEXT_SIZE 2
+      #define TFT_MISO -1
+      #define TFT_MOSI 7
+      #define TFT_SCLK 6
+      #define TFT_CS 10
+      #define TFT_DC 9
+      #define TFT_RST -1
+      #define TFT_BL -1
+      #define TOUCH_CS -1
+      #define TFT_WIDTH 240
+      #define TFT_HEIGHT 320
+      #define SCREEN_ORIENTATION 0
+      #define SCREEN_WIDTH TFT_WIDTH
+      #define SCREEN_HEIGHT TFT_HEIGHT
+      #define HEIGHT_1 TFT_WIDTH
+      #define WIDTH_1 TFT_HEIGHT
+      #define STANDARD_FONT_CHAR_LIMIT (TFT_WIDTH/6)
+      #define TEXT_HEIGHT 16
+      #define BOT_FIXED_AREA 0
+      #define TOP_FIXED_AREA 48
+      #define YMAX 320
+      #define minimum(a,b) (((a) < (b)) ? (a) : (b))
+      #define MENU_FONT &FreeMono9pt7b
+      #define BUTTON_SCREEN_LIMIT 12
+      #define BUTTON_ARRAY_LEN BUTTON_SCREEN_LIMIT
+      #define STATUS_BAR_WIDTH 16
+      #define LVGL_TICK_PERIOD 6
+      #define SHARK_GRID_COLUMNS 2
+      #define SHARK_GRID_ROWS 4
+      #define SHARK_GRID_LEFT 4
+      #define SHARK_GRID_TOP 40
+      #define SHARK_GRID_GAP_X 4
+      #define SHARK_GRID_GAP_Y 5
+      #define SHARK_GRID_CELL_W 114
+      #define SHARK_GRID_CELL_H 51
+      #define SHARK_GRID_FOOTER_Y 275
+      #define SHARK_TICK_ARM 7
     #endif
 
   #if defined(MARAUDER_M5STICKCP2)
@@ -2569,6 +2659,11 @@
 
     #ifdef MARAUDER_C5
       #define SD_CS 10
+    #endif
+
+    #ifdef MARAUDER_WAVESHARE_C5_28
+      #undef SD_CS
+      #define SD_CS 23
     #endif
 
     #ifdef MARAUDER_V8

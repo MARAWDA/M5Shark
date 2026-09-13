@@ -6,10 +6,12 @@
 #include <esp_wifi.h>
 #include <ESPmDNS.h>
 #include <DNSServer.h>
+#include <Preferences.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/semphr.h>
 #include "ESPAsyncWebServer.h"
 #include "SharkTheme.h"
+#include "SharkSentinel.h"
 #include "SharkWebPage.h"
 #include "SharkUI.h"
 #include "SharkPrank.h"
@@ -40,7 +42,8 @@ namespace {
   DNSServer dns_server;   // captive-portal DNS: resolves any host to the AP
 
   const char* const THEME_KEYS[SHARK_THEME_COUNT] = {
-    "watch", "matrix", "cyber", "spider"
+    "watch", "matrix", "cyber", "spider",
+    "aurora", "crimson", "sunset", "violet", "ghost", "neon"
   };
 
   const SharkWebTool SHARK_WEB_TOOLS[] = {
@@ -230,6 +233,8 @@ String SharkWeb::statusJson() {
   out += ",\"brightness\":" + String(getBrightnessLevel()) + ",\"sd\":" + String(sd_ready ? "true" : "false");
   out += ",\"wifi\":" + String(WiFi.status() == WL_CONNECTED ? "true" : "false") + ",\"battery\":" + String(battery);
   out += ",\"clients\":" + String(WiFi.softAPgetStationNum()) + ",\"uptime\":" + String(millis() / 1000);
+  out += ",\"sentinel\":" + String(shark_sentinel.enabled() ? "true" : "false");
+  out += ",\"sentinelAlerts\":" + String(shark_sentinel.alertCount());
   out += ",\"freeHeap\":" + String(ESP.getFreeHeap()) + ",\"usbHid\":false,\"bleHid\":true";
   String sc;
   if (screen_mtx && xSemaphoreTake(screen_mtx, pdMS_TO_TICKS(20)) == pdTRUE) {
@@ -256,6 +261,29 @@ String SharkWeb::wifiScanJson() {
   }
   return String("{\"networks\":") + networks +
          ",\"scanning\":" + (scan_await ? "true" : "false") + "}";
+}
+
+String SharkWeb::guardianJson() {
+  Preferences prefs;
+  String ssid;
+  String bssid;
+  uint8_t channel = 0;
+  if (prefs.begin("guardian", true)) {
+    ssid = prefs.getString("ssid", "");
+    bssid = prefs.getString("bssid", "");
+    channel = prefs.getUChar("channel", 0);
+    prefs.end();
+  }
+  String out = "{\"configured\":" + String(ssid.length() && bssid.length() ? "true" : "false");
+  out += ",\"ssid\":\"" + jsonEscape(ssid) + "\"";
+  out += ",\"bssid\":\"" + jsonEscape(bssid) + "\"";
+  out += ",\"channel\":" + String(channel);
+  out += ",\"deauthAlarm\":" + String(wifi_scan_obj.deauth_alarm_active ? "true" : "false");
+  out += ",\"deauthRate\":" + String(wifi_scan_obj.deauth_alarm_rate);
+  out += ",\"evilTwin\":" + String(wifi_scan_obj.evil_twin_count > 0 ? "true" : "false");
+  out += ",\"evilTwinCount\":" + String(wifi_scan_obj.evil_twin_count);
+  out += ",\"bleRssiAnomalies\":" + String(wifi_scan_obj.bleRssiAnomalyCount()) + "}";
+  return out;
 }
 
 String SharkWeb::cardJson() {
@@ -305,6 +333,7 @@ void SharkWeb::registerRoutes() {
     req->send(response);
   });
   shark_server.on("/api/status", HTTP_GET, [this](AsyncWebServerRequest* req) { req->send(200, "application/json", statusJson()); });
+  shark_server.on("/api/guardian", HTTP_GET, [this](AsyncWebServerRequest* req) { req->send(200, "application/json", guardianJson()); });
   // IQ Family Watch: family devices announce themselves here right after
   // joining this AP (SharkDeck OS ships a NetworkManager dispatcher that
   // calls it). The station's live RSSI is read from the AP association

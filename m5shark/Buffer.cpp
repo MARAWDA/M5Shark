@@ -5,9 +5,16 @@
 Buffer::Buffer(){
   bufA = (uint8_t*)malloc(BUF_SIZE);
   bufB = (uint8_t*)malloc(BUF_SIZE);
+  if (!bufA || !bufB) {
+    free(bufA);
+    free(bufB);
+    bufA = nullptr;
+    bufB = nullptr;
+  }
 }
 
 void Buffer::createFile(const char* name, bool is_pcap, bool is_gpx){
+  if (!fs || !name) return;
   int i=0;
   if (is_pcap) {
     do{
@@ -37,9 +44,7 @@ void Buffer::createFile(const char* name, bool is_pcap, bool is_gpx){
 void Buffer::open(bool is_pcap){
   bufSizeA = 0;
   bufSizeB = 0;
-
-  bufSizeB = 0;
-
+  useA = true;
   writing = true;
 
   if (is_pcap) {
@@ -156,7 +161,7 @@ void Buffer::write(uint16_t n){
 }
 
 void Buffer::write(const uint8_t* buf, uint32_t len){
-  if(!writing) return;
+  if(!writing || !buf || len == 0 || !bufA || !bufB) return;
   while(saving) delay(10);
   
   if(useA){
@@ -169,6 +174,7 @@ void Buffer::write(const uint8_t* buf, uint32_t len){
 }
 
 void Buffer::saveFs(){
+  if (!fs) return;
   file = fs->open(fileName, FILE_APPEND);
   if (!file) {
     Serial.println(text02+fileName+"'");
@@ -205,6 +211,7 @@ void Buffer::saveSerial() {
   // Additional buffer and memcpy's so that a single Serial.write() is called
   // This is necessary so that other console output isn't mixed into buffer stream
   uint8_t* buf = (uint8_t*)malloc(mark_begin_len + bufSizeA + bufSizeB + mark_close_len);
+  if (!buf) return;
   uint8_t* it = buf;
   memcpy(it, mark_begin, mark_begin_len);
   it += mark_begin_len;

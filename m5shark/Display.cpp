@@ -50,6 +50,21 @@ uint8_t Display::updateTouch(uint16_t *x, uint16_t *y, uint16_t threshold) {
       #ifdef HAS_CAP_TOUCH
         // FT6336 capacitive touch: rotation-aware + edge exclusion
         {
+          #ifdef HAS_CST3530
+          uint16_t raw_x = 0;
+          uint16_t raw_y = 0;
+          if (!cst3530_touch(&raw_x, &raw_y)) return 0;
+          uint8_t rot = this->tft.getRotation();
+          switch (rot) {
+            case 0: *x = raw_x; *y = raw_y; break;
+            case 1: *x = raw_y; *y = (TFT_WIDTH - 1) - raw_x; break;
+            case 2: *x = (TFT_WIDTH - 1) - raw_x; *y = (TFT_HEIGHT - 1) - raw_y; break;
+            case 3: *x = (TFT_HEIGHT - 1) - raw_y; *y = raw_x; break;
+          }
+          if (*x >= SCREEN_WIDTH) *x = SCREEN_WIDTH - 1;
+          if (*y >= SCREEN_HEIGHT) *y = SCREEN_HEIGHT - 1;
+          return 1;
+          #else
           uint16_t raw_x, raw_y;
           if (!ft6336_read_raw(&raw_x, &raw_y)) return 0;
 
@@ -85,6 +100,7 @@ uint8_t Display::updateTouch(uint16_t *x, uint16_t *y, uint16_t threshold) {
               break;
           }
           return 1;
+          #endif
         }
       #elif !defined(HAS_CYD_TOUCH)
         return this->tft.getTouch(x, y, threshold);
@@ -214,7 +230,13 @@ void Display::RunSetup() {
   #endif
 
   #ifdef HAS_CAP_TOUCH
-    ft6336_init();
+    #ifdef HAS_CST3530
+      cst3530_board_init();
+      cst3530_lcd_reset();
+      cst3530_init();
+    #else
+      ft6336_init();
+    #endif
   #endif
   
   tft.init();

@@ -12099,6 +12099,8 @@ void WiFiScan::recordPassiveBleFinding(String mac, String name, String detail, i
   for (int i = 0; i < passive_ble_findings->size(); i++) {
     if (passive_ble_findings->get(i).mac == mac) {
       PassiveBleFinding finding = passive_ble_findings->get(i);
+      if (finding.rssi > -128 && rssi > -128 && abs(rssi - finding.rssi) >= 20)
+        ++finding.rssi_anomalies;
       finding.name = name;
       finding.detail = detail;
       finding.rssi = rssi;
@@ -12119,6 +12121,14 @@ void WiFiScan::recordPassiveBleFinding(String mac, String name, String detail, i
   finding.last_seen = millis();
   passive_ble_findings->add(finding);
   this->bt_passive_unique = passive_ble_findings->size();
+}
+
+uint32_t WiFiScan::bleRssiAnomalyCount() const {
+  uint32_t total = 0;
+  if (!passive_ble_findings) return total;
+  for (int i = 0; i < passive_ble_findings->size(); ++i)
+    total += passive_ble_findings->get(i).rssi_anomalies;
+  return total;
 }
 
 // --- M5SHARK shared Wi-Fi dashboard control ---------------------------------

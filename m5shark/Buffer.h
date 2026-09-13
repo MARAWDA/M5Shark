@@ -50,8 +50,8 @@ class Buffer {
 
     String fileName = "/0.pcap";
     File file;
-    fs::FS* fs;
-    bool serial;
+    fs::FS* fs = nullptr;
+    bool serial = false;
 };
 
 #endif

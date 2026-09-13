@@ -20,6 +20,16 @@ https://www.online-utility.org/image/convert/to/XBM
 
 #include "Assets.h"
 #include "WiFiScan.h"
+#include "SharkSentinel.h"
+#ifdef HAS_NRF24
+  #include "Nrf24Interface.h"
+#endif
+#ifdef HAS_CC1101
+  #include "CC1101Interface.h"
+#endif
+#ifdef HAS_PN532
+  #include "Pn532Interface.h"
+#endif
 #ifdef HAS_SD
   #include "SDInterface.h"
 #endif
@@ -381,6 +391,22 @@ void setup()
   Serial.println(F("[BOOT] 05 radios (wifi only, ble deferred)"));
   wifi_scan_obj.RunSetup();
 
+  #ifdef HAS_NRF24
+    if (nrf24_obj.begin()) {
+      Serial.println(F("[BOOT] 05b nrf24 ready"));
+    }
+  #endif
+  #ifdef HAS_CC1101
+    if (cc1101_obj.begin()) {
+      Serial.println(F("[BOOT] 05c cc1101 ready"));
+    }
+  #endif
+  #ifdef HAS_PN532
+    if (pn532_obj.begin()) {
+      Serial.println(F("[BOOT] 05d pn532 ready"));
+    }
+  #endif
+
   #ifdef HAS_SCREEN
     display_obj.tft.setTextColor(TFT_GREEN, TFT_BLACK);
     #ifdef MARAUDER_V8
@@ -451,6 +477,7 @@ void setup()
   menu_function_obj.changeMenu(menu_function_obj.current_menu);*/
 
   wifi_scan_obj.StartScan(WIFI_SCAN_OFF);
+  shark_sentinel.begin();
 
   Serial.println(F("[BOOT] 09 cli"));
   cli_obj.RunSetup();
@@ -499,6 +526,7 @@ void loop()
   #endif
 
   wifi_scan_obj.main(currentTime);
+  shark_sentinel.tick(currentTime);
 
   #ifdef HAS_GPS
     gps_obj.main();

@@ -395,6 +395,8 @@ class MenuFunctions
     Menu deviceMenu;
     #ifdef MARAUDER_V8
       Menu themeMenu;
+      Menu bjornCydMenu;
+      Menu fieldOpsMenu;
     #endif
 
     // Device menu stuff
@@ -444,6 +446,7 @@ class MenuFunctions
     // Bluetooth menu stuff
     Menu bluetoothSnifferMenu;
     Menu bluetoothAttackMenu;
+    Menu bluetoothAdvancedMenu;
 
     // Settings things menus
     Menu generateSSIDsMenu;
@@ -580,6 +583,7 @@ class MenuFunctions
       void cardControlScreen();    // local SD summary + web-control handoff
       void ssidStudio();           // themed SSID generator (WiFi General)
       void scanApStudio();         // themed active AP survey (WiFi General)
+      void hardwareSelfTest();     // local subsystem readiness summary
       void sharkNotice(const char* title, const String& line);  // themed result screen
     public:
       String screenStateJson();    // live screen contents for Web Control mirror

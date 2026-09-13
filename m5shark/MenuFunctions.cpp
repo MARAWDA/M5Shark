@@ -10,6 +10,7 @@
   #include "SharkIceNav.h"
   #include "SharkUI.h"
   #include "SharkPrank.h"
+  #include "SharkSentinel.h"
   #include "SharkProfile.h"
   #include "SharkProfileSprites.h"
   #include <Preferences.h>
@@ -924,6 +925,34 @@ void MenuFunctions::sharkNotice(const char* title, const String& line) {
   uint16_t tx, ty;
   while (!display_obj.updateTouch(&tx, &ty, 350)) delay(20);
   while (display_obj.updateTouch(&tx, &ty, 350)) delay(10);
+}
+
+void MenuFunctions::hardwareSelfTest() {
+  // This is a readiness check, not a destructive test: it does not transmit,
+  // change radio settings, or write test data to the SD card.
+  String result = "DISPLAY:OK";
+  result += " / WIFI:" + String(WiFi.status() == WL_CONNECTED ? "LINK" : "READY");
+#ifdef HAS_BT
+  result += " / BLE:" + String(wifi_scan_obj.ble_initialized ? "READY" : "OFF");
+#else
+  result += " / BLE:N/A";
+#endif
+#ifdef HAS_SD
+  result += " / SD:" + String(sd_obj.supported ? "READY" : "MISSING");
+#else
+  result += " / SD:N/A";
+#endif
+#ifdef HAS_BATTERY
+  result += " / BAT:" + String(battery_obj.battery_level) + "%";
+#else
+  result += " / BAT:N/A";
+#endif
+#ifdef HAS_GPS
+  result += " / GPS:" + String(gps_obj.getGpsModuleStatus() ? "READY" : "MISSING");
+#else
+  result += " / GPS:N/A";
+#endif
+  this->sharkNotice("HARDWARE SELF-TEST", result);
 }
 
 // WiFi General -> SSID generator. The old flow opened an empty back-only
@@ -9744,6 +9773,8 @@ void MenuFunctions::RunSetup()
   deviceMenu.list = new LinkedList<MenuNode>();
   #ifdef MARAUDER_V8
     themeMenu.list = new LinkedList<MenuNode>();
+    bjornCydMenu.list = new LinkedList<MenuNode>();
+    fieldOpsMenu.list = new LinkedList<MenuNode>();
   #endif
   #ifdef HAS_GPS
     if (gps_obj.getGpsModuleStatus()) {
@@ -9828,6 +9859,8 @@ void MenuFunctions::RunSetup()
   deviceMenu.name = text_table1[9];
   #ifdef MARAUDER_V8
     themeMenu.name = "Theme";
+    bjornCydMenu.name = "Bjorn CYD App";
+    fieldOpsMenu.name = "SHARK Field Operations";
   #endif
   failedUpdateMenu.name = text_table1[11];
   confirmMenu.name = text_table1[13];
@@ -9911,6 +9944,11 @@ void MenuFunctions::RunSetup()
       this->changeMenu(&bluetoothMenu, true);
     });
   #endif
+  #if defined(HAS_NRF24) || defined(HAS_CC1101) || defined(HAS_PN532)
+    this->addNodes(&mainMenu, "RF Tools", TFTMAGENTA, WIFI, [this]() {
+      this->changeMenu(&radioMenu, true);
+    });
+  #endif
   #ifdef HAS_GPS
 	if (gps_obj.getGpsModuleStatus()) {
     	this->addNodes(&mainMenu, text1_66, TFTRED, GPS_MENU, [this]() {
@@ -9939,6 +9977,12 @@ void MenuFunctions::RunSetup()
       this->profileScreen();
       this->changeMenu(&mainMenu, true);
     });
+    this->addNodes(&mainMenu, "Bjorn CYD App", TFTORANGE, GENERAL_APPS, [this]() {
+      this->changeMenu(&bjornCydMenu, true);
+    });
+    this->addNodes(&mainMenu, "Field Operations", TFTGREEN, SCANNERS, [this]() {
+      this->changeMenu(&fieldOpsMenu, true);
+    });
     this->addNodes(&mainMenu, "Prank", TFTMAGENTA, EAPOL, [this]() {
       this->changeMenu(&prankMenu, true);
     });
@@ -9948,6 +9992,70 @@ void MenuFunctions::RunSetup()
   });
 
   #ifdef MARAUDER_V8
+    bjornCydMenu.parentMenu = &mainMenu;
+    this->addNodes(&bjornCydMenu, text09, TFTLIGHTGREY, 0, [this]() {
+      this->changeMenu(bjornCydMenu.parentMenu, true);
+    });
+    this->addNodes(&bjornCydMenu, "Auto Host Discovery", TFTGREEN, SCANNERS, [this]() {
+      this->startNetworkScannerUI(WIFI_PING_SCAN, TFT_GREEN);
+    });
+    this->addNodes(&bjornCydMenu, "Web Service Scan", TFTCYAN, GENERAL_APPS, [this]() {
+      this->startNetworkScannerUI(WIFI_SCAN_HTTP, TFT_CYAN);
+    });
+    this->addNodes(&bjornCydMenu, "Full Port Audit", TFTORANGE, PACKET_MONITOR, [this]() {
+      this->startNetworkScannerUI(WIFI_PORT_SCAN_ALL, TFT_ORANGE);
+    });
+    this->addNodes(&bjornCydMenu, "Web Dashboard", TFTMAGENTA, WIFI, [this]() {
+      const int mode = shark_web_obj.run();
+      if (mode >= 0) this->startWebTool(mode);
+      else this->changeMenu(&bjornCydMenu, true);
+    });
+    this->addNodes(&bjornCydMenu, "Save Recon Report", TFTBLUE, SD_UPDATE, [this]() {
+      this->exportSessionReport();
+      this->changeMenu(&bjornCydMenu, true);
+    });
+
+    fieldOpsMenu.parentMenu = &mainMenu;
+    this->addNodes(&fieldOpsMenu, text09, TFTLIGHTGREY, 0, [this]() {
+      this->changeMenu(fieldOpsMenu.parentMenu, true);
+    });
+    this->addNodes(&fieldOpsMenu, "Passive WiFi Survey", TFTCYAN, SCANNERS, [this]() {
+      this->scanApStudio();
+      this->changeMenu(&fieldOpsMenu, true);
+    });
+    this->addNodes(&fieldOpsMenu, "Channel Heatmap", TFTORANGE, PACKET_MONITOR, [this]() {
+      this->changeMenu(&wifiMenu, true);
+      this->changeMenu(&wifiGeneralMenu, true);
+    });
+    this->addNodes(&fieldOpsMenu, "Guardian Monitor", TFTGREEN, SCANNERS, [this]() {
+      this->startPassiveWifiToolUI(WIFI_SCAN_DEAUTH, TFT_GREEN);
+      wifi_scan_obj.deauth_alarm = true;
+      wifi_scan_obj.evil_twin = true;
+    });
+    this->addNodes(&fieldOpsMenu, "Bjorn Network Recon", TFTORANGE, GENERAL_APPS, [this]() {
+      this->changeMenu(&bjornCydMenu, true);
+    });
+    #if defined(HAS_NRF24) || defined(HAS_CC1101) || defined(HAS_PN532)
+      this->addNodes(&fieldOpsMenu, "RF Module Sweep", TFTMAGENTA, PACKET_MONITOR, [this]() {
+        this->changeMenu(&radioMenu, true);
+      });
+    #endif
+    this->addNodes(&fieldOpsMenu, "Export Evidence Report", TFTBLUE, SD_UPDATE, [this]() {
+      this->exportSessionReport();
+      this->changeMenu(&fieldOpsMenu, true);
+    });
+    this->addNodes(&fieldOpsMenu, "Hardware Self-Test", TFTWHITE, DEVICE_INFO, [this]() {
+      this->hardwareSelfTest();
+      this->changeMenu(&fieldOpsMenu, true);
+    });
+    this->addNodes(&fieldOpsMenu, "Autonomous Sentinel", TFTRED, SCANNERS, [this]() {
+      const bool enabled = !shark_sentinel.enabled();
+      shark_sentinel.setEnabled(enabled);
+      this->sharkNotice(enabled ? "SENTINEL ENABLED" : "SENTINEL DISABLED",
+                        enabled ? "PASSIVE ALERT LOGGING ACTIVE" : "BACKGROUND MONITOR STOPPED");
+      this->changeMenu(&fieldOpsMenu, true);
+    });
+
     // Prank section (added; existing menus untouched). Each prank is a
     // self-contained Start/Stop/Back screen that releases its radio on exit.
     prankMenu.name = "Prank";
@@ -10041,6 +10149,75 @@ void MenuFunctions::RunSetup()
   });
   this->addNodes(&sharkDefenseMenu, "Deauth Guard", TFTRED, DEAUTH_SNIFF, [this]() {
     this->startPassiveWifiToolUI(WIFI_SCAN_DEAUTH, TFT_RED);
+  });
+  this->addNodes(&sharkDefenseMenu, "Guardian Mode", TFTGREEN, SCANNERS, [this]() {
+    this->startPassiveWifiToolUI(WIFI_SCAN_DEAUTH, TFT_GREEN);
+    wifi_scan_obj.deauth_alarm = true;
+    wifi_scan_obj.evil_twin = true;
+  });
+  this->addNodes(&sharkDefenseMenu, "Capture Guardian Baseline", TFTCYAN, PROFILE_ICON, [this]() {
+    if (WiFi.status() != WL_CONNECTED) {
+      this->sharkNotice("BASELINE NOT CAPTURED", "CONNECT TO TRUSTED WIFI FIRST");
+      this->changeMenu(&sharkDefenseMenu, true);
+      return;
+    }
+    Preferences prefs;
+    if (!prefs.begin("guardian", false)) {
+      this->sharkNotice("BASELINE FAILED", "NVS STORAGE UNAVAILABLE");
+      this->changeMenu(&sharkDefenseMenu, true);
+      return;
+    }
+    prefs.putString("ssid", WiFi.SSID());
+    prefs.putString("bssid", WiFi.BSSIDstr());
+    prefs.putUChar("channel", WiFi.channel());
+    prefs.end();
+    this->sharkNotice("BASELINE CAPTURED", WiFi.SSID() + " / " + WiFi.BSSIDstr());
+    this->changeMenu(&sharkDefenseMenu, true);
+  });
+  this->addNodes(&sharkDefenseMenu, "Verify Guardian Baseline", TFTORANGE, SCANNERS, [this]() {
+    Preferences prefs;
+    if (!prefs.begin("guardian", true)) {
+      this->sharkNotice("BASELINE EMPTY", "CAPTURE A TRUSTED WIFI FIRST");
+      this->changeMenu(&sharkDefenseMenu, true);
+      return;
+    }
+    const String trusted_ssid = prefs.getString("ssid", "");
+    const String trusted_bssid = prefs.getString("bssid", "");
+    const uint8_t trusted_channel = prefs.getUChar("channel", 0);
+    prefs.end();
+    if (!trusted_ssid.length() || !trusted_bssid.length()) {
+      this->sharkNotice("BASELINE EMPTY", "CAPTURE A TRUSTED WIFI FIRST");
+      this->changeMenu(&sharkDefenseMenu, true);
+      return;
+    }
+
+    const int found = WiFi.scanNetworks(false, true, false, 120);
+    bool trusted_seen = false;
+    uint16_t same_ssid = 0;
+    uint16_t other_bssid = 0;
+    for (int i = 0; i < found; ++i) {
+      if (WiFi.SSID(i) != trusted_ssid) continue;
+      ++same_ssid;
+      if (WiFi.BSSIDstr(i) == trusted_bssid) trusted_seen = true;
+      else ++other_bssid;
+    }
+    WiFi.scanDelete();
+    String result = trusted_seen ? "TRUSTED AP SEEN" : "TRUSTED AP MISSING";
+    result += " / " + String(same_ssid) + " SSID / " + String(other_bssid) + " OTHER BSSID";
+    if (trusted_channel) result += " / CH " + String(trusted_channel);
+    #ifdef HAS_SD
+      if (sd_obj.supported) {
+        if (!SD.exists("/shark")) SD.mkdir("/shark");
+        File log = SD.open("/shark/guardian.log", FILE_APPEND);
+        if (log) {
+          log.println(String(millis()) + "," + (trusted_seen ? "trusted_seen" : "trusted_missing") +
+                      ",same_ssid=" + String(same_ssid) + ",other_bssid=" + String(other_bssid));
+          log.close();
+        }
+      }
+    #endif
+    this->sharkNotice(trusted_seen && other_bssid == 0 ? "BASELINE OK" : "BASELINE ALERT", result);
+    this->changeMenu(&sharkDefenseMenu, true);
   });
   this->addNodes(&sharkDefenseMenu, "Pineapple Watch", TFTYELLOW, PINESCAN_SNIFF, [this]() {
     this->startWifiToolUI(WIFI_SCAN_PINESCAN, TFT_YELLOW);
@@ -10619,6 +10796,152 @@ void MenuFunctions::RunSetup()
   // shared attack targets.
   this->addNodes(&wifiGeneralMenu, "Scan AP", TFTCYAN, SCANNERS, [this]() {
     this->scanApStudio();
+    this->changeMenu(&wifiGeneralMenu, true);
+  });
+  this->addNodes(&wifiGeneralMenu, "Channel Heatmap", TFTORANGE, PACKET_MONITOR, [this]() {
+    extern LinkedList<AccessPoint>* access_points;
+    uint16_t channel_count[15] = {};
+    int8_t strongest[15];
+    for (uint8_t channel = 0; channel <= 14; ++channel) strongest[channel] = -128;
+    uint16_t total = 0;
+    if (access_points) {
+      for (int i = 0; i < access_points->size(); ++i) {
+        const AccessPoint ap = access_points->get(i);
+        if (ap.channel > 14) continue;
+        ++channel_count[ap.channel];
+        if (ap.rssi > strongest[ap.channel]) strongest[ap.channel] = ap.rssi;
+        ++total;
+      }
+    }
+
+    TFT_eSPI& tft = display_obj.tft;
+    tft.fillScreen(TFT_BLACK);
+    this->drawStatusBar();
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextColor(WD_CYAN, TFT_BLACK);
+    tft.drawString("// CHANNEL HEATMAP", 6, STATUS_BAR_WIDTH + 8, 2);
+    tft.setTextColor(WD_GREY, TFT_BLACK);
+    tft.drawString(String(total) + " APs  //  2.4GHz occupancy", 6, STATUS_BAR_WIDTH + 30, 1);
+    tft.drawFastHLine(6, STATUS_BAR_WIDTH + 42, tft.width() - 12, WD_EDGE);
+
+    uint16_t peak = 1;
+    for (uint8_t channel = 1; channel <= 14; ++channel)
+      if (channel_count[channel] > peak) peak = channel_count[channel];
+    const int16_t chart_x = 10;
+    const int16_t chart_y = 278;
+    const int16_t chart_h = 184;
+    const int16_t bar_w = 13;
+    for (uint8_t channel = 1; channel <= 14; ++channel) {
+      const int16_t x = chart_x + (channel - 1) * 16;
+      const int16_t bar_h = channel_count[channel] * chart_h / peak;
+      const uint16_t bar_color = channel_count[channel] ?
+                                  (strongest[channel] > -60 ? WD_AMBER : WD_CYAN) : WD_EDGE;
+      tft.drawFastVLine(x + 5, chart_y - chart_h, chart_h, WD_EDGE);
+      if (bar_h > 0) tft.fillRect(x, chart_y - bar_h, bar_w, bar_h, bar_color);
+      tft.setTextDatum(TC_DATUM);
+      tft.setTextColor(WD_GREY, TFT_BLACK);
+      tft.drawString(String(channel), x + 6, chart_y + 5, 1);
+      if (channel_count[channel] > 0) {
+        tft.setTextColor(WD_BONE, TFT_BLACK);
+        tft.drawString(String(channel_count[channel]), x + 6, chart_y - bar_h - 11, 1);
+      }
+    }
+    tft.setTextDatum(TL_DATUM);
+    tft.setTextColor(WD_DIM, TFT_BLACK);
+    tft.drawString("BAR = AP COUNT   AMBER = STRONG SIGNAL", 10, 292, 1);
+    wdPanel(tft, 10, 304, tft.width() - 20, 20, WD_CYAN, WD_CYAN, WD_CYAN);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(TFT_BLACK, WD_CYAN);
+    tft.drawString("BACK", tft.width() / 2, 314, 1);
+    tft.setTextDatum(TL_DATUM);
+    uint16_t tx = 0;
+    uint16_t ty = 0;
+    while (!display_obj.updateTouch(&tx, &ty, 350)) delay(20);
+    this->changeMenu(&wifiGeneralMenu, true);
+  });
+  this->addNodes(&wifiGeneralMenu, "Export AP Survey CSV", TFTGREEN, SD_UPDATE, [this]() {
+    #ifdef HAS_SD
+      extern LinkedList<AccessPoint>* access_points;
+      if (!sd_obj.supported) {
+        this->sharkNotice("NO SD CARD", "INSERT SD TO EXPORT SURVEY");
+        this->changeMenu(&wifiGeneralMenu, true);
+        return;
+      }
+      if (!SD.exists("/shark")) SD.mkdir("/shark");
+      const String path = "/shark/ap-survey-" + String(millis()) + ".csv";
+      File csv = SD.open(path, FILE_WRITE);
+      if (!csv) {
+        this->sharkNotice("EXPORT FAILED", "COULD NOT OPEN CSV FILE");
+        this->changeMenu(&wifiGeneralMenu, true);
+        return;
+      }
+      csv.println("BSSID,SSID,Channel,RSSI,Security,WPS,Stations,LastSeenMs");
+      uint16_t rows = 0;
+      if (access_points) {
+        for (int i = 0; i < access_points->size(); ++i) {
+          const AccessPoint ap = access_points->get(i);
+          String ssid = ap.essid;
+          ssid.replace("\"", "\"\"");
+          char bssid[18];
+          snprintf(bssid, sizeof(bssid), "%02X:%02X:%02X:%02X:%02X:%02X",
+                   ap.bssid[0], ap.bssid[1], ap.bssid[2], ap.bssid[3],
+                   ap.bssid[4], ap.bssid[5]);
+          csv.print(bssid);
+          csv.print(",\""); csv.print(ssid); csv.print("\",");
+          csv.print(ap.channel); csv.print(",");
+          csv.print(ap.rssi); csv.print(",\"");
+          csv.print(wifi_scan_obj.security_int_to_string(ap.sec));
+          csv.print("\","); csv.print(ap.wps ? "yes" : "no"); csv.print(",");
+          csv.print(ap.stations ? ap.stations->size() : 0); csv.print(",");
+          csv.println(ap.last_seen_ms);
+          ++rows;
+        }
+      }
+      csv.close();
+      this->sharkNotice("SURVEY EXPORTED", String(rows) + " APs -> " + path);
+      this->changeMenu(&wifiGeneralMenu, true);
+    #else
+      this->sharkNotice("SD NOT AVAILABLE", "BUILD HAS NO SD SUPPORT");
+      this->changeMenu(&wifiGeneralMenu, true);
+    #endif
+  });
+  this->addNodes(&wifiGeneralMenu, "WiFi Security Survey", TFTGREEN, SCANNERS, [this]() {
+    const int found = WiFi.scanNetworks(false, true, false, 120);
+    uint16_t open_count = 0;
+    uint16_t hidden_count = 0;
+    uint16_t five_ghz_count = 0;
+    uint8_t channel_hits[15] = {};
+    int8_t strongest = -128;
+    uint8_t busiest_channel = 0;
+    uint8_t busiest_count = 0;
+
+    if (found > 0) {
+      for (int i = 0; i < found; ++i) {
+        const uint8_t channel = WiFi.channel(i);
+        if (WiFi.encryptionType(i) == WIFI_AUTH_OPEN) ++open_count;
+        if (WiFi.SSID(i).isEmpty()) ++hidden_count;
+        if (channel > 14) ++five_ghz_count;
+        if (WiFi.RSSI(i) > strongest) strongest = WiFi.RSSI(i);
+        if (channel <= 14) {
+          ++channel_hits[channel];
+          if (channel_hits[channel] > busiest_count) {
+            busiest_count = channel_hits[channel];
+            busiest_channel = channel;
+          }
+        }
+      }
+    }
+
+    WiFi.scanDelete();
+    String summary = String(found > 0 ? found : 0) + " AP / " +
+                     String(open_count) + " OPEN / " +
+                     String(hidden_count) + " HIDDEN / CH " +
+                     String(busiest_channel) + " BUSY";
+    if (five_ghz_count > 0)
+      summary += " / " + String(five_ghz_count) + " 5G";
+    if (strongest > -128)
+      summary += " / " + String(strongest) + "dBm";
+    this->sharkNotice("WIFI SECURITY SURVEY", summary);
     this->changeMenu(&wifiGeneralMenu, true);
   });
 
@@ -11512,6 +11835,194 @@ void MenuFunctions::RunSetup()
   this->addNodes(&bluetoothMenu, "Bluetooth Attacks", TFTRED, ATTACKS, [this]() {
     this->changeMenu(&bluetoothAttackMenu, true);
   });
+  this->addNodes(&bluetoothMenu, "Advanced BLE Tools", TFTMAGENTA, BLUETOOTH, [this]() {
+    this->changeMenu(&bluetoothAdvancedMenu, true);
+  });
+
+  bluetoothAdvancedMenu.parentMenu = &bluetoothMenu;
+  this->addNodes(&bluetoothAdvancedMenu, text09, TFTLIGHTGREY, 0, [this]() {
+    this->changeMenu(bluetoothAdvancedMenu.parentMenu, true);
+  });
+  this->addNodes(&bluetoothAdvancedMenu, "BLE Predator", TFTCYAN, BLUETOOTH_SNIFF, [this]() {
+    display_obj.clearScreen();
+    this->drawStatusBar();
+    wifi_scan_obj.StartScan(BT_SCAN_ALL, TFT_CYAN);
+    this->drawBluetoothSnifferUI(true);
+  });
+  this->addNodes(&bluetoothAdvancedMenu, "BLE Jammer", TFTRED, DEAUTH_SNIFF, [this]() {
+    display_obj.clearScreen();
+    this->drawStatusBar();
+    wifi_scan_obj.StartScan(BT_ATTACK_SOUR_APPLE, TFT_RED);
+    this->drawBleSpamUI(true);
+  });
+  this->addNodes(&bluetoothAdvancedMenu, "BLE Spoofer", TFTYELLOW, ATTACKS, [this]() {
+    display_obj.clearScreen();
+    this->drawStatusBar();
+    wifi_scan_obj.StartScan(BT_ATTACK_SPAM_ALL, TFT_YELLOW);
+    this->drawBleSpamUI(true);
+  });
+  this->addNodes(&bluetoothAdvancedMenu, "WhisperPair", TFTGREEN, BLUETOOTH_SNIFF, [this]() {
+    display_obj.clearScreen();
+    this->drawStatusBar();
+    wifi_scan_obj.StartScan(BT_SCAN_AIRTAG_MON, TFT_GREEN);
+    this->drawPassiveBleDetectorUI(true);
+  });
+  this->addNodes(&bluetoothAdvancedMenu, "Airoha RACE", TFTORANGE, BLUETOOTH, [this]() {
+    display_obj.clearScreen();
+    this->drawStatusBar();
+    wifi_scan_obj.StartScan(BT_SCAN_FLOCK, TFT_ORANGE);
+    this->drawPassiveBleDetectorUI(true);
+  });
+  this->addNodes(&bluetoothAdvancedMenu, "SkeletonKey", TFTBLUE, KEYBOARD_ICO, [this]() {
+    display_obj.clearScreen();
+    this->drawStatusBar();
+    wifi_scan_obj.StartScan(BT_SCAN_SIMPLE, TFT_BLUE);
+    this->drawBluetoothSnifferUI(true);
+  });
+  this->addNodes(&bluetoothAdvancedMenu, "KARR", TFTPURPLE, SCANNERS, [this]() {
+    display_obj.clearScreen();
+    this->drawStatusBar();
+    wifi_scan_obj.StartScan(BT_SCAN_RAYBAN, TFT_PURPLE);
+    this->drawPassiveBleDetectorUI(true);
+  });
+  this->addNodes(&bluetoothAdvancedMenu, "BLE RSSI Guard", TFTGREEN, SCANNERS, [this]() {
+    display_obj.clearScreen();
+    this->drawStatusBar();
+    wifi_scan_obj.StartScan(BT_SCAN_FLOCK, TFT_GREEN);
+    this->drawPassiveBleDetectorUI(true);
+  });
+
+  #if defined(HAS_NRF24) || defined(HAS_CC1101) || defined(HAS_PN532)
+    radioMenu.parentMenu = &mainMenu;
+    this->addNodes(&radioMenu, text09, TFTLIGHTGREY, 0, [this]() {
+      this->changeMenu(radioMenu.parentMenu, true);
+    });
+    this->addNodes(&radioMenu, "RF Status", TFTWHITE, SCANNERS, [this]() {
+      Serial.println(F("[RF] module status"));
+      #ifdef HAS_NRF24
+        Serial.print(F("[RF] nRF24: "));
+        Serial.println(nrf24_obj.isPresent() ? "present" : "missing");
+      #endif
+      #ifdef HAS_CC1101
+        Serial.print(F("[RF] CC1101: "));
+        Serial.println(cc1101_obj.isPresent() ? "present" : "missing");
+      #endif
+      #ifdef HAS_PN532
+        Serial.print(F("[RF] PN532: "));
+        Serial.println(pn532_obj.isPresent() ? "present" : "missing");
+      #endif
+      this->changeMenu(&radioMenu, true);
+    });
+    this->addNodes(&radioMenu, "RF Sweep", TFTCYAN, PACKET_MONITOR, [this]() {
+      Serial.println(F("[RF] starting cross-module sweep"));
+      #ifdef HAS_NRF24
+        Serial.println(F("[RF] -- nRF24 --"));
+        nrf24_obj.runDiagnostic();
+        nrf24_obj.runChannelScan();
+      #endif
+      #ifdef HAS_CC1101
+        Serial.println(F("[RF] -- CC1101 --"));
+        cc1101_obj.runDiagnostic();
+        cc1101_obj.runScan();
+      #endif
+      #ifdef HAS_PN532
+        Serial.println(F("[RF] -- PN532 --"));
+        pn532_obj.runDiagnostic();
+        pn532_obj.runScan();
+      #endif
+      Serial.println(F("[RF] cross-module sweep complete"));
+      this->changeMenu(&radioMenu, true);
+    });
+  #endif
+
+  #ifdef HAS_NRF24
+    this->addNodes(&radioMenu, "nRF24 Tools", TFTMAGENTA, WIFI, [this]() {
+      this->changeMenu(&radioNrfMenu, true);
+    });
+    this->addNodes(&radioMenu, "nRF24 Quick check", TFTGREEN, SCANNERS, [this]() {
+      nrf24_obj.runDiagnostic();
+      this->changeMenu(&radioMenu, true);
+    });
+
+    radioNrfMenu.parentMenu = &radioMenu;
+    this->addNodes(&radioNrfMenu, text09, TFTLIGHTGREY, 0, [this]() {
+      this->changeMenu(radioNrfMenu.parentMenu, true);
+    });
+    this->addNodes(&radioNrfMenu, "nRF24 Diagnostic", TFTGREEN, SCANNERS, [this]() {
+      nrf24_obj.runDiagnostic();
+      this->changeMenu(&radioNrfMenu, true);
+    });
+    this->addNodes(&radioNrfMenu, "nRF24 Channel Scan", TFTCYAN, PACKET_MONITOR, [this]() {
+      nrf24_obj.runChannelScan();
+      this->changeMenu(&radioNrfMenu, true);
+    });
+    this->addNodes(&radioNrfMenu, "nRF24 Carrier Heatmap", TFTCYAN, PACKET_MONITOR, [this]() {
+      nrf24_obj.runCarrierHeatmap();
+      this->changeMenu(&radioNrfMenu, true);
+    });
+    this->addNodes(&radioNrfMenu, "nRF24 RX Test", TFTYELLOW, BLUETOOTH_SNIFF, [this]() {
+      nrf24_obj.runRxTest();
+      this->changeMenu(&radioNrfMenu, true);
+    });
+    this->addNodes(&radioNrfMenu, "nRF24 Jammer Test", TFTRED, DEAUTH_SNIFF, [this]() {
+      nrf24_obj.runJammerTest();
+      this->changeMenu(&radioNrfMenu, true);
+    });
+  #endif
+
+  #ifdef HAS_CC1101
+    this->addNodes(&radioMenu, "CC1101 Tools", TFTORANGE, PACKET_MONITOR, [this]() {
+      this->changeMenu(&radioCc1101Menu, true);
+    });
+    this->addNodes(&radioMenu, "CC1101 Quick check", TFTGREEN, SCANNERS, [this]() {
+      cc1101_obj.runDiagnostic();
+      this->changeMenu(&radioMenu, true);
+    });
+
+    radioCc1101Menu.parentMenu = &radioMenu;
+    this->addNodes(&radioCc1101Menu, text09, TFTLIGHTGREY, 0, [this]() {
+      this->changeMenu(radioCc1101Menu.parentMenu, true);
+    });
+    this->addNodes(&radioCc1101Menu, "CC1101 Diagnostic", TFTGREEN, SCANNERS, [this]() {
+      cc1101_obj.runDiagnostic();
+      this->changeMenu(&radioCc1101Menu, true);
+    });
+    this->addNodes(&radioCc1101Menu, "CC1101 Scan", TFTCYAN, PACKET_MONITOR, [this]() {
+      cc1101_obj.runScan();
+      this->changeMenu(&radioCc1101Menu, true);
+    });
+    this->addNodes(&radioCc1101Menu, "CC1101 RX Test", TFTYELLOW, BLUETOOTH_SNIFF, [this]() {
+      cc1101_obj.runRxTest();
+      this->changeMenu(&radioCc1101Menu, true);
+    });
+    this->addNodes(&radioCc1101Menu, "CC1101 Jammer", TFTRED, DEAUTH_SNIFF, [this]() {
+      cc1101_obj.runJammerTest();
+      this->changeMenu(&radioCc1101Menu, true);
+    });
+  #endif
+
+  #ifdef HAS_PN532
+    this->addNodes(&radioMenu, "PN532 Tools", TFTBLUE, CARD_READER, [this]() {
+      this->changeMenu(&radioPn532Menu, true);
+    });
+    this->addNodes(&radioMenu, "PN532 Quick check", TFTGREEN, SCANNERS, [this]() {
+      pn532_obj.runDiagnostic();
+      this->changeMenu(&radioMenu, true);
+    });
+
+    radioPn532Menu.parentMenu = &radioMenu;
+    this->addNodes(&radioPn532Menu, text09, TFTLIGHTGREY, 0, [this]() {
+      this->changeMenu(radioPn532Menu.parentMenu, true);
+    });
+    this->addNodes(&radioPn532Menu, "PN532 Diagnostic", TFTGREEN, SCANNERS, [this]() {
+      pn532_obj.runDiagnostic();
+      this->changeMenu(&radioPn532Menu, true);
+    });
+    this->addNodes(&radioPn532Menu, "PN532 Scan", TFTCYAN, PACKET_MONITOR, [this]() {
+      pn532_obj.runScan();
+      this->changeMenu(&radioPn532Menu, true);
+    });
+  #endif
 
   // Build bluetooth sniffer Menu
   bluetoothSnifferMenu.parentMenu = &bluetoothMenu; // Second Menu is third menu parent

@@ -385,6 +385,7 @@ struct PassiveBleFinding {
   int rssi = -128;
   uint32_t hits = 0;
   uint32_t last_seen = 0;
+  uint32_t rssi_anomalies = 0;
 };
 
 // Same shape as PassiveBleFinding, for the Wi-Fi passive detector dashboard
@@ -1401,6 +1402,7 @@ class WiFiScan
       void stopCardSkimmerDetector();
       void clearCardSkimmerDetector();
       void recordPassiveBleFinding(String mac, String name, String detail, int rssi);
+      uint32_t bleRssiAnomalyCount() const;
       void startPassiveBleDetector();
       void stopPassiveBleDetector();
       void clearPassiveBleDetector();

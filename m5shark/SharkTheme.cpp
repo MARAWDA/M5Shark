@@ -55,9 +55,75 @@ const SharkThemeDef shark_themes[SHARK_THEME_COUNT] = {
     0xD904, 0xFACB, 0x2CDF,
     SHARK_STYLE_BLOCK
   },
+  // 4 - AURORA: green-blue polar bands with quiet teal surfaces.
+  {
+    "Aurora", "AUR", "POLAR LIGHT",
+    "SYNCING BAY", "CAPTURING AURORA", "FIELD SHIFT", "WINDOW OPEN",
+    SHARK_SPLASH_AURORA, SHARK_MARK_ALIEN,
+    0x05FF, 0x04D7, 0x02A5,
+    0xF7FF, 0xB5FF, 0x6B7A, 0x1D7A, 0x0E2E, 0x0818, 0x0520,
+    0x07FF, 0xF800,
+    0x05FF, 0xB5FF, 0x07FF,
+    SHARK_STYLE_TERMINAL
+  },
+  // 5 - CRIMSON: red-black tactical overlay with amber warning accents.
+  {
+    "Crimson", "BLOOD", "REDLINE",
+    "BREACH TRACE", "LOCKING VECTOR", "SIGNAL BURN", "LINE SECURE",
+    SHARK_SPLASH_EMBER, SHARK_MARK_DEMON,
+    0xF800, 0xD000, 0x9800,
+    0xFFFF, 0xF7BE, 0xAD40, 0x1D0B, 0x2008, 0x1004, 0x0C02,
+    0xFD20, 0xF800,
+    0xF800, 0xF7BE, 0xFD20,
+    SHARK_STYLE_BLOCK
+  },
+  // 6 - SUNSET: lime-orange synthwave horizon with a violet base.
+  {
+    "Sunset", "DUSK", "SYNTHWAVE",
+    "CARRIER HUSH", "PULSE WARMUP", "LANGER SIGNAL", "FUSION READY",
+    SHARK_SPLASH_SUNSET, SHARK_MARK_BIO,
+    0xFBE0, 0xE981, 0xAA80,
+    0xFFFF, 0xF7BE, 0xF4A1, 0x1A0F, 0x280C, 0x1806, 0x0B03,
+    0xFD20, 0xF800,
+    0xFBE0, 0xF7BE, 0xF81F,
+    SHARK_STYLE_NEON
+  },
+  // 7 - VIOLET: deep purple with magenta highlights and cool neon edges.
+  {
+    "Violet", "VLT", "GHOST WIRE",
+    "STABILIZING FEED", "SHADOW LINK", "NOISE DROP", "PULSE LOCKED",
+    SHARK_SPLASH_WEB, SHARK_MARK_REAPER,
+    0xA7FF, 0x7BFE, 0x2B5A,
+    0xFFFF, 0xD4AF, 0x8D3A, 0x2107, 0x180B, 0x0E05, 0x0903,
+    0x07FF, 0xF800,
+    0xA7FF, 0xD4AF, 0x07FF,
+    SHARK_STYLE_SOFT
+  },
+  // 8 - GHOST: bone white on charcoal with a low-contrast silver edge.
+  {
+    "Ghost", "GHO", "SILENT MODE",
+    "SWEEPING DARK", "MUTE LOOP", "PASSIVE SCAN", "NO SIGNAL LEFT",
+    SHARK_SPLASH_RADAR, SHARK_MARK_NONE,
+    0xC618, 0xBDF7, 0x8C71,
+    0xFFFF, 0xD69A, 0x94B2, 0x2A0D, 0x1CE7, 0x1022, 0x0A12,
+    0xFD20, 0xF800,
+    0xF7DE, 0xD69A, 0x07FF,
+    SHARK_STYLE_MINIMAL
+  },
+  // 9 - NEON: fluorescent lime and cyan with a hard minimal shell.
+  {
+    "Neon", "NXT", "HYPER DRIVE",
+    "RADIANT SCAN", "HYPERSTREAM", "GLITCH EDGE", "NEON LOCK",
+    SHARK_SPLASH_RAIN, SHARK_MARK_CYBER,
+    0x07FF, 0x0FFE, 0x07C0,
+    0xFFFF, 0xC618, 0x83E0, 0x24E9, 0x1CE7, 0x1022, 0x0A12,
+    0xFD20, 0xF800,
+    0x07FF, 0xAFF5, 0x07E0,
+    SHARK_STYLE_MINIMAL
+  },
 };
 
-static_assert(SHARK_THEME_COUNT == 4, "This release exposes exactly four themes");
+static_assert(SHARK_THEME_COUNT == 10, "This release exposes ten themes");
 
 const SharkThemeDef* shark_theme = &shark_themes[0];
 uint8_t shark_theme_index = 0;
