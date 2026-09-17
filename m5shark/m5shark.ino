@@ -262,7 +262,11 @@ void setup()
   // lock releases itself after five clean boots. Also emits a stage trace
   // so a serial capture pinpoints any future boot crash immediately.
   Serial.println(F("[BOOT] 01 serial up"));
-  wifi_scan_obj.bleBootGuard();
+  #if defined(MARAUDER_HOSYOND_35)
+    Serial.println(F("[BT] disabled on Hosyond"));
+  #else
+    wifi_scan_obj.bleBootGuard();
+  #endif
 
   #ifdef HAS_C5_SD
     sharedSPI.begin(SD_SCK, SD_MISO, SD_MOSI);
@@ -288,15 +292,15 @@ void setup()
   #ifdef HAS_SCREEN
     digitalWrite(TFT_CS, HIGH);
   #endif
-  
+
   #if defined(HAS_SD) && !defined(HAS_C5_SD)
-    pinMode(SD_CS, OUTPUT);
-
-    delay(10);
-  
-    digitalWrite(SD_CS, HIGH);
-
-    delay(10);
+    // Hosyond uses a separate VSPI SD bus (CS=5); must idle-high before TFT init.
+    #if defined(SD_CS) && (SD_CS >= 0)
+      pinMode(SD_CS, OUTPUT);
+      delay(10);
+      digitalWrite(SD_CS, HIGH);
+      delay(10);
+    #endif
   #endif
 
   //Serial.begin(115200);
@@ -411,17 +415,22 @@ void setup()
     display_obj.tft.setTextColor(TFT_GREEN, TFT_BLACK);
     #ifdef MARAUDER_V8
       // Writes into the splash status line so the skull stays intact while
-      // the radios come up.
-      display_obj.tft.fillRect(18, 268, 204, 9, TFT_BLACK);
-      display_obj.tft.setTextDatum(ML_DATUM);
-      display_obj.tft.setTextColor(WD_CYAN, TFT_BLACK);
-      display_obj.tft.drawString(">", 18, 272, 1);
-      display_obj.tft.setTextColor(WD_BONE, TFT_BLACK);
-      display_obj.tft.drawString(wifi_scan_obj.ble_guard_locked
-                                   ? "SERVICES // BT GUARDED OFF"
-                                   : "STARTING SERVICES",
-                                 30, 272, 1);
-      display_obj.tft.setTextDatum(TL_DATUM);
+      // the radios come up. Y tracks the live panel height (240x320 or 320x480).
+      {
+        TFT_eSPI& tft = display_obj.tft;
+        const int16_t ax = (tft.width() - 204) / 2;
+        const int16_t sy = (tft.height() >= 400) ? (tft.height() - 52) : 268;
+        tft.fillRect(ax, sy, 204, 9, TFT_BLACK);
+        tft.setTextDatum(ML_DATUM);
+        tft.setTextColor(WD_CYAN, TFT_BLACK);
+        tft.drawString(">", ax, sy + 4, 1);
+        tft.setTextColor(WD_BONE, TFT_BLACK);
+        tft.drawString(wifi_scan_obj.ble_guard_locked
+                         ? "SERVICES // BT GUARDED OFF"
+                         : "STARTING SERVICES",
+                       ax + 12, sy + 4, 1);
+        tft.setTextDatum(TL_DATUM);
+      }
     #else
       display_obj.tft.drawCentreString("Initializing...", TFT_WIDTH/2, TFT_HEIGHT * 0.82, 1);
     #endif

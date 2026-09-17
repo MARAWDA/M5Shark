@@ -19,12 +19,27 @@ namespace {
   // 6 x 8 px GLCD font fill 204 x 224 px of the 240 x 320 panel. Building the
   // art out of CP437 dither blocks and stray ASCII is what produces the
   // leaked-terminal look, and every mark costs about 1 KB of flash.
+  // On wider panels (Hosyond 320x480) the art stays the same size and is only
+  // recentered; chrome Y positions track the live panel height.
   const uint8_t ART_COLS = 34;
   const uint8_t ART_ROWS = 28;
-  const int16_t ART_X = 18;
-  const int16_t ART_Y = 38;
   const int16_t CELL_W = 6;
   const int16_t CELL_H = 8;
+  const int16_t ART_W = ART_COLS * CELL_W;
+  inline int16_t artX(int16_t width) { return (width - ART_W) / 2; }
+  inline int16_t artY() { return 38; }
+  inline int16_t statusY(TFT_eSPI& tft) {
+    return (tft.height() >= 400) ? (tft.height() - 52) : 268;
+  }
+  inline int16_t progressY(TFT_eSPI& tft) {
+    return (tft.height() >= 400) ? (tft.height() - 34) : 286;
+  }
+  inline int16_t footerY(TFT_eSPI& tft) {
+    return (tft.height() >= 400) ? (tft.height() - 16) : 310;
+  }
+  inline int16_t frameH(TFT_eSPI& tft) {
+    return statusY(tft) - 28;
+  }
   const uint16_t WD_KEEP_COLOR = 0;
 
   const char* const skull_mask[ART_ROWS] = {
@@ -285,8 +300,8 @@ namespace {
       return;
 
     const uint16_t noise = wdHash(col, row, salt);
-    const int16_t x = ART_X + col * CELL_W + dx;
-    const int16_t y = ART_Y + row * CELL_H;
+    const int16_t x = artX(tft.width()) + col * CELL_W + dx;
+    const int16_t y = artY() + row * CELL_H;
     uint8_t glyph;
     uint16_t color;
 
@@ -323,9 +338,9 @@ namespace {
   }
 
   void clearRows(TFT_eSPI& tft, int16_t first_row, int16_t rows) {
-    tft.fillRect(ART_X - 6,
-                 ART_Y + first_row * CELL_H,
-                 ART_COLS * CELL_W + 12,
+    tft.fillRect(artX(tft.width()) - 6,
+                 artY() + first_row * CELL_H,
+                 ART_W + 12,
                  rows * CELL_H,
                  TFT_BLACK);
   }
@@ -354,8 +369,8 @@ namespace {
       const uint16_t noise = wdHash(i, salt, 0xA5A5);
       const uint8_t col = noise % ART_COLS;
       const uint8_t row = (noise >> 6) % ART_ROWS;
-      tft.drawChar(ART_X + col * CELL_W,
-                   ART_Y + row * CELL_H,
+      tft.drawChar(artX(tft.width()) + col * CELL_W,
+                   artY() + row * CELL_H,
                    (uint8_t)edge_glyphs[(noise >> 11) & 0x0F],
                    ((noise >> 4) & 0x07) ? WD_DIM : WD_CYAN_DIM,
                    TFT_BLACK,
@@ -382,21 +397,25 @@ namespace {
   }
 
   void drawStatus(TFT_eSPI& tft, const char* message, uint16_t color) {
-    tft.fillRect(ART_X, 268, ART_COLS * CELL_W, 9, TFT_BLACK);
+    const int16_t ax = artX(tft.width());
+    const int16_t sy = statusY(tft);
+    tft.fillRect(ax, sy, ART_W, 9, TFT_BLACK);
     tft.setTextDatum(ML_DATUM);
     tft.setTextColor(WD_CYAN, TFT_BLACK);
-    tft.drawString(">", ART_X, 272, 1);
+    tft.drawString(">", ax, sy + 4, 1);
     tft.setTextColor(color, TFT_BLACK);
-    tft.drawString(message, ART_X + 12, 272, 1);
+    tft.drawString(message, ax + 12, sy + 4, 1);
     tft.setTextDatum(TL_DATUM);
   }
 
   // One bar cell per art column, so the readout lines up with the artwork.
   void drawProgress(TFT_eSPI& tft, uint8_t complete) {
+    const int16_t ax = artX(tft.width());
+    const int16_t py = progressY(tft);
     for (uint8_t i = 0; i < ART_COLS; i++) {
       const bool on = i < complete;
-      tft.drawChar(ART_X + i * CELL_W,
-                   286,
+      tft.drawChar(ax + i * CELL_W,
+                   py,
                    on ? 0xDB : 0xB0,
                    on ? WD_CYAN : WD_EDGE,
                    TFT_BLACK,
@@ -405,18 +424,20 @@ namespace {
   }
 
   void drawFooter(TFT_eSPI& tft, int16_t width) {
-    wdRule(tft, ART_X, 300, ART_COLS * CELL_W, WD_EDGE);
+    const int16_t ax = artX(width);
+    const int16_t fy = footerY(tft);
+    wdRule(tft, ax, fy - 10, ART_W, WD_EDGE);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(WD_DIM, TFT_BLACK);
-    tft.drawString(String(HARDWARE_NAME) + "  //  " + shark_theme->tag, width / 2, 310, 1);
+    tft.drawString(String(HARDWARE_NAME) + "  //  " + shark_theme->tag, width / 2, fy, 1);
     tft.setTextDatum(TL_DATUM);
   }
 
   // The wordmark sits inside the art, punched out of it on a black plate.
   void drawWordMark(TFT_eSPI& tft, int16_t row, bool framed) {
     const int16_t mark_w = (int16_t)strlen(shark_theme->wordmark) * CELL_W;
-    const int16_t x = ART_X + ((ART_COLS * CELL_W - mark_w) / 2);
-    const int16_t y = ART_Y + row * CELL_H;
+    const int16_t x = artX(tft.width()) + ((ART_W - mark_w) / 2);
+    const int16_t y = artY() + row * CELL_H;
     tft.fillRect(x - 6, y - 4, mark_w + 12, CELL_H + 7, TFT_BLACK);
     if (framed) {
       tft.drawRect(x - 6, y - 4, mark_w + 12, CELL_H + 7, WD_EDGE);
@@ -515,17 +536,18 @@ namespace {
 
     for (uint8_t frame = 0; frame < 34; frame++) {
       for (uint8_t col = 0; col < ART_COLS; col++) {
-        const int16_t x = ART_X + col * CELL_W;
+        const int16_t x = artX(tft.width()) + col * CELL_W;
+        const int16_t ay = artY();
 
         // Erase the tail and dim the cell behind the head.
         const int16_t tail_row = head[col] - trail[col];
         if (tail_row >= 0 && tail_row < ART_ROWS)
-          tft.fillRect(x, ART_Y + tail_row * CELL_H, CELL_W, CELL_H, TFT_BLACK);
+          tft.fillRect(x, ay + tail_row * CELL_H, CELL_W, CELL_H, TFT_BLACK);
 
         const int16_t body_row = head[col] - 1;
         if (body_row >= 0 && body_row < ART_ROWS)
           tft.drawChar(x,
-                       ART_Y + body_row * CELL_H,
+                       ay + body_row * CELL_H,
                        (uint8_t)rain_glyphs[wdHash(col, body_row, 3) & 0x0F],
                        shark_theme->accent,
                        TFT_BLACK,
@@ -534,7 +556,7 @@ namespace {
         const int16_t fade_row = head[col] - (trail[col] / 2);
         if (fade_row >= 0 && fade_row < ART_ROWS)
           tft.drawChar(x,
-                       ART_Y + fade_row * CELL_H,
+                       ay + fade_row * CELL_H,
                        (uint8_t)rain_glyphs[wdHash(col, fade_row, 5) & 0x0F],
                        shark_theme->accent_dim,
                        TFT_BLACK,
@@ -543,7 +565,7 @@ namespace {
         head[col] += speed[col];
         if (head[col] >= 0 && head[col] < ART_ROWS)
           tft.drawChar(x,
-                       ART_Y + head[col] * CELL_H,
+                       ay + head[col] * CELL_H,
                        (uint8_t)rain_glyphs[wdHash(col, head[col], frame) & 0x0F],
                        shark_theme->mark_a,
                        TFT_BLACK,
@@ -838,7 +860,7 @@ namespace {
 
     // Boot chrome: header, corner frame, footer, and an identity plate.
     drawHeader(tft, w, version);
-    wdCornerTicks(tft, 4, 28, w - 8, 268, 10, WD_CYAN_DIM);
+    wdCornerTicks(tft, 4, 28, w - 8, frameH(tft), 10, WD_CYAN_DIM);
     drawFooter(tft, w);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(WD_GREY, TFT_BLACK);
@@ -1187,8 +1209,8 @@ namespace {
   // Just the logo image: the small detailed DedSec skull bitmap on a plain black
   // field, with a scanline decrypt sweep + brief glitch, then a clean settle.
   void playDedsecLogo(TFT_eSPI& tft, int16_t width) {
-    tft.fillRect(0, 24, width, 268 - 24 + 4, TFT_BLACK);
-    wdCornerTicks(tft, 4, 28, width - 8, 268, 10, WD_CYAN_DIM);
+    tft.fillRect(0, 24, width, statusY(tft) - 24 + 4, TFT_BLACK);
+    wdCornerTicks(tft, 4, 28, width - 8, frameH(tft), 10, WD_CYAN_DIM);
     drawStatus(tft, "DECRYPTING IDENTITY", WD_GREY);
 
     const uint16_t c_hi  = skullMix(shark_theme->accent, 0xFFFF, 0.45f);
@@ -1264,8 +1286,8 @@ namespace {
 
   void playLogoReveal(TFT_eSPI& tft, int16_t width) {
     // Clear the whole art field, keep the header/footer chrome.
-    tft.fillRect(0, 24, width, 268 - 24 + 4, TFT_BLACK);
-    wdCornerTicks(tft, 4, 28, width - 8, 268, 10, WD_CYAN_DIM);
+    tft.fillRect(0, 24, width, statusY(tft) - 24 + 4, TFT_BLACK);
+    wdCornerTicks(tft, 4, 28, width - 8, frameH(tft), 10, WD_CYAN_DIM);
 
     drawStatus(tft, "LOADING IDENTITY", WD_GREY);
 
@@ -1325,7 +1347,7 @@ void playSharkBoot(TFT_eSPI& tft, const String& version) {
   // Splash 2: the DedSec logo, glitch-revealed (ends on the theme's "ready" line).
   tft.fillScreen(TFT_BLACK);
   drawHeader(tft, width, version);
-  wdCornerTicks(tft, 4, 28, width - 8, 268, 10, WD_CYAN_DIM);
+  wdCornerTicks(tft, 4, 28, width - 8, frameH(tft), 10, WD_CYAN_DIM);
   drawFooter(tft, width);
   playDedsecLogo(tft, width);
 

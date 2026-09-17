@@ -10,7 +10,7 @@
   #include "FS.h"
 #endif
 #include "SD.h"
-#ifdef HAS_C5_SD
+#if defined(HAS_C5_SD) || defined(HAS_SEPARATE_SD) || defined(HAS_CYD_TOUCH) || defined(MARAUDER_M5STICKC) || defined(MARAUDER_CARDPUTER) || defined(MARAUDER_CARDPUTER_ADV)
   #include "SPI.h"
 #endif
 #include "Buffer.h"
@@ -36,8 +36,8 @@ extern Settings settings_obj;
 class SDInterface {
 
   private:
-  #if (defined(MARAUDER_M5STICKC) || defined(HAS_CYD_TOUCH) || defined(MARAUDER_CARDPUTER) || defined(MARAUDER_CARDPUTER_ADV))
-    SPIClass *spiExt;
+  #if (defined(MARAUDER_M5STICKC) || defined(HAS_CYD_TOUCH) || defined(HAS_SEPARATE_SD) || defined(MARAUDER_CARDPUTER) || defined(MARAUDER_CARDPUTER_ADV))
+    SPIClass *spiExt = nullptr;
   #elif defined(HAS_C5_SD)
     SPIClass* _spi;
     int _cs;
@@ -54,11 +54,15 @@ class SDInterface {
     uint64_t cardSizeMB;
     //uint64_t cardSizeGB;
     bool supported = false;
+    uint32_t mount_hz = 0;
 
     String card_sz;
     String selected_file_name = "";
   
     bool initSD();
+    bool remountSD();
+    bool isMounted();
+    bool ensureMounted();
 
     LinkedList<String>* sd_files;
 

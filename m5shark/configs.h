@@ -65,6 +65,11 @@
   #define HAS_CC1101
   #define HAS_PN532
 
+  #if defined(MARAUDER_HOSYOND_35)
+    #undef HAS_CC1101
+    #undef HAS_PN532
+  #endif
+
 // Product version identity. M5SHARK is a full modification of the
 // ESP32Marauder v1.15.0 engine by justcallmekoko -- that credit is kept in
 // the docs and landing page -- but the version this device reports is the
@@ -392,6 +397,7 @@
     #define HAS_SEPARATE_SD
     #define HAS_CYD_PORTRAIT
     //#define HAS_NIMBLE_2
+    #define HAS_IDF_3
     #define HAS_DIRECT_UPLOAD
   #endif
 
@@ -593,6 +599,18 @@
     // Direct cloud upload remains disabled; local SD logging, the browser SD
     // manager, and all analysis tools remain available.
     //#define HAS_DIRECT_UPLOAD
+  #endif
+
+  #if defined(MARAUDER_HOSYOND_35)
+    // Hosyond reuses the V8 UI/feature set, but it is a classic 4 MB ESP32
+    // CYD 3.5 board: no PSRAM, no C5 shared-SPI SD helper, no dual-band radio.
+    // Keep HAS_BT/HAS_NIMBLE_2/HAS_GPS so V8 menus compile; boot still skips BLE init.
+    #undef HAS_PSRAM
+    #undef HAS_C5_SD
+    #undef HAS_DUAL_BAND
+    #undef HAS_BATTERY
+    #undef HAS_ACT_LED
+    #undef HAS_BT_REMOTE
   #endif
 
   #ifdef MARAUDER_PANCAKE
@@ -1373,7 +1391,9 @@
       #define KIT_LED_BUILTIN 13
     #endif
 
-    #if defined(MARAUDER_V8)
+    // Native M5 SHARK v8 panel only. Hosyond builds also define MARAUDER_V8 for
+    // UI code, but must keep the CYD 3.5 320x480 geometry below.
+    #if defined(MARAUDER_V8) && !defined(MARAUDER_HOSYOND_35)
       #define CHAN_PER_PAGE 7
 
       #define SCREEN_CHAR_WIDTH 40
@@ -1715,9 +1735,27 @@
       //#define MENU_FONT &FreeMonoBold9pt7b
       //#define MENU_FONT &FreeSans9pt7b
       //#define MENU_FONT &FreeSansBold9pt7b
-      #define BUTTON_SCREEN_LIMIT 12
-      #define BUTTON_ARRAY_LEN BUTTON_SCREEN_LIMIT
-      #define STATUS_BAR_WIDTH 16
+      #if defined(MARAUDER_V8)
+        // V8 UI on the 3.5" ST7796 panel: keep the 2x4 card grid and scale the
+        // cells to the 320x480 portrait canvas.
+        #define BUTTON_SCREEN_LIMIT 8
+        #define BUTTON_ARRAY_LEN BUTTON_SCREEN_LIMIT
+        #define SHARK_GRID_COLUMNS 2
+        #define SHARK_GRID_ROWS 4
+        #define SHARK_GRID_LEFT 6
+        #define SHARK_GRID_TOP 48
+        #define SHARK_GRID_GAP_X 6
+        #define SHARK_GRID_GAP_Y 8
+        #define SHARK_GRID_CELL_W 151
+        #define SHARK_GRID_CELL_H 80
+        #define SHARK_GRID_FOOTER_Y 430
+        #define SHARK_TICK_ARM 8
+        #define STATUS_BAR_WIDTH 20
+      #else
+        #define BUTTON_SCREEN_LIMIT 12
+        #define BUTTON_ARRAY_LEN BUTTON_SCREEN_LIMIT
+        #define STATUS_BAR_WIDTH 16
+      #endif
       #define LVGL_TICK_PERIOD 6
 
       #define FRAME_X 100
@@ -2312,7 +2350,7 @@
   #define PKT_HALF    (HEIGHT_1 / 2)
   #define PKT_AXIS_W  (WIDTH_1 - 10)
 
-  #if defined(MARAUDER_V8)
+  #if defined(MARAUDER_V8) && !defined(MARAUDER_HOSYOND_35)
     #define BANNER_TIME 100
     
     #define COMMAND_PREFIX "!"
@@ -2601,6 +2639,15 @@
       #define SD_CS 5
     #endif
 
+    #ifdef MARAUDER_HOSYOND_35
+      #undef SD_CS
+      #define SD_CS 5
+      // XPT2046 on TFT SPI bus (TFT_eSPI getTouch). Must not be used as SD host.
+      #ifndef TOUCH_CS
+        #define TOUCH_CS 33
+      #endif
+    #endif
+
     #ifdef MARAUDER_CYD_GUITION
       #define SD_CS 5
     #endif
@@ -2666,7 +2713,7 @@
       #define SD_CS 23
     #endif
 
-    #ifdef MARAUDER_V8
+    #if defined(MARAUDER_V8) && !defined(MARAUDER_HOSYOND_35)
       #define SD_CS 10
     #endif
 
@@ -3137,7 +3184,9 @@
       #define SD_SCK  6
     #endif
 
-    #ifdef MARAUDER_V8
+    // Native V8 shares the TFT SPI bus for SD. Hosyond keeps the separate CYD
+    // SD bus defined above and must not inherit these TFT pin aliases.
+    #if defined(MARAUDER_V8) && !defined(MARAUDER_HOSYOND_35)
       #define SD_MISO TFT_MISO
       #define SD_MOSI TFT_MOSI
       #define SD_SCK  TFT_SCLK
@@ -3192,6 +3241,21 @@
     #endif
   #endif
   //// END STUPID CYD STUFF
+
+  //// NRF24 BOARD PIN OVERRIDES
+  #ifdef HAS_NRF24
+    #ifdef MARAUDER_CYD_3_5_INCH
+      // No sub-GHz module wired on this build. The nRF24 shares the SD/VSPI
+      // bus (SCK18/MOSI23/MISO19); CE is tied straight to 3.3V on the module
+      // (always enabled), so only CSN needs its own free GPIO.
+      #define NRF24_SCK_PIN  18
+      #define NRF24_MISO_PIN 19
+      #define NRF24_MOSI_PIN 23
+      #define NRF24_CSN_PIN  4
+      #define NRF24_CE_PIN   26
+    #endif
+  #endif
+  //// END NRF24 BOARD PIN OVERRIDES
 
   //// FUNNY FLIPPER LED STUFF
 

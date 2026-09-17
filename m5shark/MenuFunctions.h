@@ -448,6 +448,19 @@ class MenuFunctions
     Menu bluetoothAttackMenu;
     Menu bluetoothAdvancedMenu;
 
+    #if defined(HAS_NRF24) || defined(HAS_CC1101) || defined(HAS_PN532)
+      Menu radioMenu;
+    #endif
+    #ifdef HAS_NRF24
+      Menu radioNrfMenu;
+    #endif
+    #ifdef HAS_CC1101
+      Menu radioCc1101Menu;
+    #endif
+    #ifdef HAS_PN532
+      Menu radioPn532Menu;
+    #endif
+
     // Settings things menus
     Menu generateSSIDsMenu;
 
@@ -574,6 +587,7 @@ class MenuFunctions
       void drawBleSpamUI(bool full_redraw = false);
       void handleBleSpamTouch(uint16_t touch_x, uint16_t touch_y);
       void profileScreen();
+      void bjornAppScreen();       // immersive Bjorn CYD shell; EXIT -> main
       void markActiveTheme();
       void startRuView();          // connect if needed, then run RuView CSI
       void buildRuViewConnect();   // scan APs and show the in-place picker

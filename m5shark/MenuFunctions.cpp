@@ -3,9 +3,20 @@
 #include <algorithm>
 #include <vector>
 
+#ifdef HAS_NRF24
+  #include "Nrf24Interface.h"
+#endif
+#ifdef HAS_CC1101
+  #include "CC1101Interface.h"
+#endif
+#ifdef HAS_PN532
+  #include "Pn532Interface.h"
+#endif
+
 #ifdef MARAUDER_V8
   #include "SharkTheme.h"
   #include "SharkWeb.h"
+#include "SharkDualBoot.h"
   #include "SharkRadar.h"
   #include "SharkIceNav.h"
   #include "SharkUI.h"
@@ -1586,10 +1597,18 @@ void MenuFunctions::profileScreen() {
   sharkProfileSave();
 }
 
-// RuView needs a live Wi-Fi association to read CSI. If we already have one,
-// start sensing; otherwise open the in-place connect picker, which itself
-// starts RuView on a successful join. Either way the user ends up in RuView
-// without ever seeing a dead "JOIN WIFI FIRST" screen.
+// Immersive Bjorn CYD app: owns the display like Operator Profile / Card
+// Control. Recon tools stay one tap away; EXIT restores Shark main UI.
+void MenuFunctions::bjornAppScreen() {
+  // Real MARAWDA/cyd_bjorn-port firmware via SD dual-boot (1:1).
+  // 4 MB flash cannot hold Shark + Bjorn together; inactive image lives on SD.
+#if defined(HAS_SCREEN) && defined(MARAUDER_V8)
+  SharkDualBoot::launchBjorn();
+#else
+  this->changeMenu(&bjornCydMenu, true);
+#endif
+}
+
 void MenuFunctions::startRuView() {
   if (WiFi.status() == WL_CONNECTED) {
     display_obj.clearScreen();
@@ -4499,8 +4518,13 @@ void MenuFunctions::exitNetworkScannerUI() {
   wifi_scan_obj.network_scan_ui_owned = false;
   if (wifi_scan_obj.isNetworkScannerMode(wifi_scan_obj.currentScanMode))
     wifi_scan_obj.StartScan(WIFI_SCAN_OFF);
-  display_obj.init();
-  this->changeMenu(&wifiScannerMenu, true);
+  // When Bjorn owns a nested scanner loop it will redraw its home UI.
+  // Only jump to the WiFi scanner menu from the normal Shark menu path.
+  if (this->current_menu != &bjornCydMenu &&
+      this->current_menu != &mainMenu) {
+    display_obj.init();
+    this->changeMenu(&wifiScannerMenu, true);
+  }
 }
 
 // --- Custom Beacon List dashboard ----------------------------------------
@@ -7594,7 +7618,9 @@ void MenuFunctions::main(uint32_t currentTime)
         #ifdef HAS_SCREEN
           #ifdef MARAUDER_V8
             if (wifi_scan_obj.currentScanMode == BT_SCAN_ANALYZER)
+              #ifdef MARAUDER_V8
               this->drawBluetoothAnalyzerUI(false);
+              #endif
             else if (!this->wifi_tool_ui) {
               this->setGraphScale(this->graphScaleCheck(wifi_scan_obj._analyzer_values));
               this->drawGraph(wifi_scan_obj._analyzer_values);
@@ -7609,27 +7635,41 @@ void MenuFunctions::main(uint32_t currentTime)
       #if defined(MARAUDER_V8) && defined(HAS_BT)
         if (wifi_scan_obj.currentScanMode == BT_SCAN_ALL &&
             !this->bt_sniffer_data_view)
+          #ifdef MARAUDER_V8
           this->drawBluetoothSnifferUI(false);
+          #endif
         if (wifi_scan_obj.currentScanMode == BT_SCAN_FLIPPER &&
             !this->bt_flipper_data_view)
+          #ifdef MARAUDER_V8
           this->drawFlipperSnifferUI(false);
+          #endif
         if (wifi_scan_obj.currentScanMode == BT_SCAN_SKIMMERS &&
             !this->bt_skimmer_data_view)
+          #ifdef MARAUDER_V8
           this->drawCardSkimmerUI(false);
+          #endif
         if (((wifi_scan_obj.currentScanMode == BT_SCAN_AIRTAG) ||
              (wifi_scan_obj.currentScanMode == BT_SCAN_AIRTAG_MON) ||
              (wifi_scan_obj.currentScanMode == BT_SCAN_FLOCK) ||
              (wifi_scan_obj.currentScanMode == BT_SCAN_RAYBAN)) &&
             !this->bt_passive_data_view)
+          #ifdef MARAUDER_V8
           this->drawPassiveBleDetectorUI(false);
+          #endif
         // GPS Data owns its themed screen; repaint is throttled + change-
         // gated inside drawGpsDataUI itself.
         if (wifi_scan_obj.currentScanMode == WIFI_SCAN_GPS_DATA)
+          #ifdef MARAUDER_V8
           this->drawGpsDataUI(false);
+          #endif
         if (wifi_scan_obj.currentScanMode == GPS_TRACKER)
+          #ifdef MARAUDER_V8
           this->drawGpsTrackerUI(false);
+          #endif
         if (wifi_scan_obj.currentScanMode == BT_SCAN_FOX_HUNT)
+          #ifdef MARAUDER_V8
           this->drawFoxHuntUI(false);
+          #endif
         if (wifi_scan_obj.currentScanMode == BT_ATTACK_SOUR_APPLE ||
             wifi_scan_obj.currentScanMode == BT_ATTACK_SWIFTPAIR_SPAM ||
             wifi_scan_obj.currentScanMode == BT_ATTACK_APPLE_JUICE ||
@@ -7637,36 +7677,60 @@ void MenuFunctions::main(uint32_t currentTime)
             wifi_scan_obj.currentScanMode == BT_ATTACK_GOOGLE_SPAM ||
             wifi_scan_obj.currentScanMode == BT_ATTACK_FLIPPER_SPAM ||
             wifi_scan_obj.currentScanMode == BT_ATTACK_SPAM_ALL)
+          #ifdef MARAUDER_V8
           this->drawBleSpamUI(false);
+          #endif
       #endif
 
       #ifdef MARAUDER_V8
         if (wifi_scan_obj.currentScanMode == WIFI_SCAN_SIG_STREN)
+          #ifdef MARAUDER_V8
           this->drawWiFiFoxHuntUI(false);
+          #endif
         // Wi-Fi sniffers using the shared passive-detector dashboard.
         if (this->wifi_passive_ui && wifi_scan_obj.isPassiveWifiMode() &&
             !this->wifi_passive_data_view)
+          #ifdef MARAUDER_V8
           this->drawPassiveWifiDetectorUI(false);
+          #endif
         if (this->wifi_tool_ui &&
             !this->wifi_packet_target_view &&
             this->isWifiToolUiMode(wifi_scan_obj.currentScanMode))
+          #ifdef MARAUDER_V8
           this->drawWifiToolUI(false);
+          #endif
         if (this->network_scan_ui)
+          #ifdef MARAUDER_V8
           this->drawNetworkScannerUI(false);
+          #endif
         if (this->beacon_list_ui)
+          #ifdef MARAUDER_V8
           this->drawBeaconListUI(false);
+          #endif
         if (this->beacon_spam_ui)
+          #ifdef MARAUDER_V8
           this->drawBeaconSpamUI(false);
+          #endif
         if (this->probe_flood_ui)
+          #ifdef MARAUDER_V8
           this->drawProbeFloodUI(false);
+          #endif
         if (this->deauth_flood_ui)
+          #ifdef MARAUDER_V8
           this->drawDeauthFloodUI(false);
+          #endif
         if (this->attack_dash_ui)
+          #ifdef MARAUDER_V8
           this->drawAttackDashUI(false);
+          #endif
         if (this->funny_beacon_ui)
+          #ifdef MARAUDER_V8
           this->drawFunnyBeaconUI(false);
+          #endif
         if (this->rick_roll_ui)
+          #ifdef MARAUDER_V8
           this->drawRickRollUI(false);
+          #endif
       #endif
 
       if (wifi_scan_obj.currentScanMode == WIFI_SCAN_CHAN_ACT) {
@@ -9196,7 +9260,9 @@ void MenuFunctions::battery2(bool initial)
 void MenuFunctions::updateStatusBar()
 {
   #ifdef MARAUDER_V8
+    #ifdef MARAUDER_V8
     this->drawSharkTopBar(false);
+    #endif
     return;
   #endif
 
@@ -9403,14 +9469,18 @@ void MenuFunctions::setSharkHudActivity(uint8_t activity_mask, bool active)
 
   // Blocking tools do not return to the Arduino loop while they run, so make
   // their real radio state visible immediately instead of waiting for exit.
+  #ifdef MARAUDER_V8
   this->drawSharkTopBar(true);
+  #endif
 }
 #endif
 
 void MenuFunctions::drawStatusBar()
 {
   #ifdef MARAUDER_V8
+    #ifdef MARAUDER_V8
     this->drawSharkTopBar(true);
+    #endif
     return;
   #endif
 
@@ -9823,6 +9893,20 @@ void MenuFunctions::RunSetup()
   // Bluetooth menu stuff
   bluetoothSnifferMenu.list = new LinkedList<MenuNode>();
   bluetoothAttackMenu.list = new LinkedList<MenuNode>();
+  bluetoothAdvancedMenu.list = new LinkedList<MenuNode>();
+
+  #if defined(HAS_NRF24) || defined(HAS_CC1101) || defined(HAS_PN532)
+    radioMenu.list = new LinkedList<MenuNode>();
+  #endif
+  #ifdef HAS_NRF24
+    radioNrfMenu.list = new LinkedList<MenuNode>();
+  #endif
+  #ifdef HAS_CC1101
+    radioCc1101Menu.list = new LinkedList<MenuNode>();
+  #endif
+  #ifdef HAS_PN532
+    radioPn532Menu.list = new LinkedList<MenuNode>();
+  #endif
 
   // Settings stuff
   generateSSIDsMenu.list = new LinkedList<MenuNode>();
@@ -9944,7 +10028,7 @@ void MenuFunctions::RunSetup()
       this->changeMenu(&bluetoothMenu, true);
     });
   #endif
-  #if defined(HAS_NRF24) || defined(HAS_CC1101) || defined(HAS_PN532)
+  #if defined(MARAUDER_V8) && (defined(HAS_NRF24) || defined(HAS_CC1101) || defined(HAS_PN532))
     this->addNodes(&mainMenu, "RF Tools", TFTMAGENTA, WIFI, [this]() {
       this->changeMenu(&radioMenu, true);
     });
@@ -9974,11 +10058,15 @@ void MenuFunctions::RunSetup()
   });
   #ifdef MARAUDER_V8
     this->addNodes(&mainMenu, "Operator Profile", TFTCYAN, PROFILE_ICON, [this]() {
+      #ifdef MARAUDER_V8
       this->profileScreen();
+      #endif
       this->changeMenu(&mainMenu, true);
     });
     this->addNodes(&mainMenu, "Bjorn CYD App", TFTORANGE, GENERAL_APPS, [this]() {
-      this->changeMenu(&bjornCydMenu, true);
+      // Boots real cyd_bjorn-port firmware from SD; Exit inside Bjorn restores Shark.
+      this->bjornAppScreen();
+      this->changeMenu(&mainMenu, true);
     });
     this->addNodes(&mainMenu, "Field Operations", TFTGREEN, SCANNERS, [this]() {
       this->changeMenu(&fieldOpsMenu, true);
@@ -10035,7 +10123,7 @@ void MenuFunctions::RunSetup()
     this->addNodes(&fieldOpsMenu, "Bjorn Network Recon", TFTORANGE, GENERAL_APPS, [this]() {
       this->changeMenu(&bjornCydMenu, true);
     });
-    #if defined(HAS_NRF24) || defined(HAS_CC1101) || defined(HAS_PN532)
+    #if defined(MARAUDER_V8) && (defined(HAS_NRF24) || defined(HAS_CC1101) || defined(HAS_PN532))
       this->addNodes(&fieldOpsMenu, "RF Module Sweep", TFTMAGENTA, PACKET_MONITOR, [this]() {
         this->changeMenu(&radioMenu, true);
       });
@@ -10142,7 +10230,9 @@ void MenuFunctions::RunSetup()
     // RuView needs a live Wi-Fi link to read CSI. If we are not connected, open
     // an in-place picker that connects and drops straight into RuView, so the
     // user never lands on a dead "JOIN WIFI FIRST" screen.
+    #ifdef MARAUDER_V8
     this->startRuView();
+    #endif
   });
   this->addNodes(&sharkDefenseMenu, "Drone RID Detector", TFTGREEN, BLUETOOTH_SNIFF, [this]() {
     this->startWifiToolUI(SHARK_DRONE_RID_SCAN, TFT_GREEN);
@@ -10262,7 +10352,9 @@ void MenuFunctions::RunSetup()
   this->addNodes(&sharkDefenseMenu, "Deauth Alarm", TFTRED, DEAUTH_SNIFF, [this]() {
     this->startPassiveWifiToolUI(WIFI_SCAN_DEAUTH, TFT_RED);
     wifi_scan_obj.deauth_alarm = true;   // set after StartScan (which resets it)
+    #ifdef MARAUDER_V8
     this->drawPassiveWifiDetectorUI(true);
+    #endif
   });
   // Evil Twin Scan: normal AP scan on the passive detector dashboard, with
   // an amber strip flagging SSIDs advertised by more than one BSSID (the
@@ -10270,7 +10362,9 @@ void MenuFunctions::RunSetup()
   this->addNodes(&sharkDefenseMenu, "Evil Twin Scan", TFTYELLOW, BEACON_SNIFF, [this]() {
     this->startPassiveWifiToolUI(WIFI_SCAN_AP, TFT_YELLOW);
     wifi_scan_obj.evil_twin = true;      // set after StartScan (which resets it)
+    #ifdef MARAUDER_V8
     this->drawPassiveWifiDetectorUI(true);
+    #endif
   });
   // Wardrive Log: AP + BLE + GPS -> Wigle-format CSV on SD (needs GPS + SD),
   // on the shared Wi-Fi monitor dashboard. Without a GPS module the scan
@@ -10297,13 +10391,17 @@ void MenuFunctions::RunSetup()
       display_obj.clearScreen();
       this->drawStatusBar();
       wifi_scan_obj.StartScan(BT_SCAN_AIRTAG_MON, TFT_WHITE);
+      #ifdef MARAUDER_V8
       this->drawPassiveBleDetectorUI(true);
+      #endif
     });
     this->addNodes(&sharkDefenseMenu, "Card Skimmer", TFTMAGENTA, CC_SKIMMERS, [this]() {
       display_obj.clearScreen();
       this->drawStatusBar();
       wifi_scan_obj.StartScan(BT_SCAN_SKIMMERS, TFT_MAGENTA);
+      #ifdef MARAUDER_V8
       this->drawCardSkimmerUI(true);
+      #endif
     });
   #endif
 
@@ -10591,7 +10689,9 @@ void MenuFunctions::RunSetup()
           display_obj.clearScreen();
           this->drawStatusBar();
           wifi_scan_obj.StartScan(WIFI_SCAN_SIG_STREN, TFT_CYAN);
+          #ifdef MARAUDER_V8
           this->drawWiFiFoxHuntUI(true);
+          #endif
         });
       }
     }
@@ -11847,52 +11947,68 @@ void MenuFunctions::RunSetup()
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_ALL, TFT_CYAN);
+    #ifdef MARAUDER_V8
     this->drawBluetoothSnifferUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAdvancedMenu, "BLE Jammer", TFTRED, DEAUTH_SNIFF, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_ATTACK_SOUR_APPLE, TFT_RED);
+    #ifdef MARAUDER_V8
     this->drawBleSpamUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAdvancedMenu, "BLE Spoofer", TFTYELLOW, ATTACKS, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_ATTACK_SPAM_ALL, TFT_YELLOW);
+    #ifdef MARAUDER_V8
     this->drawBleSpamUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAdvancedMenu, "WhisperPair", TFTGREEN, BLUETOOTH_SNIFF, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_AIRTAG_MON, TFT_GREEN);
+    #ifdef MARAUDER_V8
     this->drawPassiveBleDetectorUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAdvancedMenu, "Airoha RACE", TFTORANGE, BLUETOOTH, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_FLOCK, TFT_ORANGE);
+    #ifdef MARAUDER_V8
     this->drawPassiveBleDetectorUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAdvancedMenu, "SkeletonKey", TFTBLUE, KEYBOARD_ICO, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_SIMPLE, TFT_BLUE);
+    #ifdef MARAUDER_V8
     this->drawBluetoothSnifferUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAdvancedMenu, "KARR", TFTPURPLE, SCANNERS, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_RAYBAN, TFT_PURPLE);
+    #ifdef MARAUDER_V8
     this->drawPassiveBleDetectorUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAdvancedMenu, "BLE RSSI Guard", TFTGREEN, SCANNERS, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_FLOCK, TFT_GREEN);
+    #ifdef MARAUDER_V8
     this->drawPassiveBleDetectorUI(true);
+    #endif
   });
 
-  #if defined(HAS_NRF24) || defined(HAS_CC1101) || defined(HAS_PN532)
+  #if defined(MARAUDER_V8) && (defined(HAS_NRF24) || defined(HAS_CC1101) || defined(HAS_PN532))
     radioMenu.parentMenu = &mainMenu;
     this->addNodes(&radioMenu, text09, TFTLIGHTGREY, 0, [this]() {
       this->changeMenu(radioMenu.parentMenu, true);
@@ -11935,7 +12051,7 @@ void MenuFunctions::RunSetup()
     });
   #endif
 
-  #ifdef HAS_NRF24
+  #if defined(MARAUDER_V8) && defined(HAS_NRF24)
     this->addNodes(&radioMenu, "nRF24 Tools", TFTMAGENTA, WIFI, [this]() {
       this->changeMenu(&radioNrfMenu, true);
     });
@@ -11947,6 +12063,39 @@ void MenuFunctions::RunSetup()
     radioNrfMenu.parentMenu = &radioMenu;
     this->addNodes(&radioNrfMenu, text09, TFTLIGHTGREY, 0, [this]() {
       this->changeMenu(radioNrfMenu.parentMenu, true);
+    });
+    this->addNodes(&radioNrfMenu, "Spectrum Scanner", TFTCYAN, PACKET_MONITOR, [this]() {
+      nrf24_obj.runSpectrumScanner();
+      display_obj.init();
+      this->changeMenu(&radioNrfMenu, true);
+    });
+    this->addNodes(&radioNrfMenu, "Spectrum Analyzer", TFTCYAN, PACKET_MONITOR, [this]() {
+      nrf24_obj.runSpectrumAnalyzer();
+      display_obj.init();
+      this->changeMenu(&radioNrfMenu, true);
+    });
+    this->addNodes(&radioNrfMenu, "WLAN Jammer", TFTRED, DEAUTH_SNIFF, [this]() {
+      if (!this->attackPinOk()) { this->attackPinDenied(); return; }
+      nrf24_obj.runWlanJammer();
+      display_obj.init();
+      this->changeMenu(&radioNrfMenu, true);
+    });
+    this->addNodes(&radioNrfMenu, "ProtoKill", TFTRED, DEAUTH_SNIFF, [this]() {
+      if (!this->attackPinOk()) { this->attackPinDenied(); return; }
+      nrf24_obj.runProtoKill();
+      display_obj.init();
+      this->changeMenu(&radioNrfMenu, true);
+    });
+    this->addNodes(&radioNrfMenu, "Promiscuous Sniff", TFTYELLOW, BLUETOOTH_SNIFF, [this]() {
+      nrf24_obj.runPromiscuousSniffer();
+      display_obj.init();
+      this->changeMenu(&radioNrfMenu, true);
+    });
+    this->addNodes(&radioNrfMenu, "MouseJack", TFTMAGENTA, BLUETOOTH_SNIFF, [this]() {
+      if (!this->attackPinOk()) { this->attackPinDenied(); return; }
+      nrf24_obj.runMouseJack();
+      display_obj.init();
+      this->changeMenu(&radioNrfMenu, true);
     });
     this->addNodes(&radioNrfMenu, "nRF24 Diagnostic", TFTGREEN, SCANNERS, [this]() {
       nrf24_obj.runDiagnostic();
@@ -11965,12 +12114,13 @@ void MenuFunctions::RunSetup()
       this->changeMenu(&radioNrfMenu, true);
     });
     this->addNodes(&radioNrfMenu, "nRF24 Jammer Test", TFTRED, DEAUTH_SNIFF, [this]() {
+      if (!this->attackPinOk()) { this->attackPinDenied(); return; }
       nrf24_obj.runJammerTest();
       this->changeMenu(&radioNrfMenu, true);
     });
   #endif
 
-  #ifdef HAS_CC1101
+  #if defined(MARAUDER_V8) && defined(HAS_CC1101)
     this->addNodes(&radioMenu, "CC1101 Tools", TFTORANGE, PACKET_MONITOR, [this]() {
       this->changeMenu(&radioCc1101Menu, true);
     });
@@ -12001,7 +12151,7 @@ void MenuFunctions::RunSetup()
     });
   #endif
 
-  #ifdef HAS_PN532
+  #if defined(MARAUDER_V8) && defined(HAS_PN532)
     this->addNodes(&radioMenu, "PN532 Tools", TFTBLUE, CARD_READER, [this]() {
       this->changeMenu(&radioPn532Menu, true);
     });
@@ -12033,31 +12183,41 @@ void MenuFunctions::RunSetup()
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_ALL, TFT_GREEN);
+    #ifdef MARAUDER_V8
     this->drawBluetoothSnifferUI(true);
+    #endif
   });
   this->addNodes(&bluetoothSnifferMenu, "Flipper Sniff", TFTORANGE, FLIPPER, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_FLIPPER, TFT_ORANGE);
+    #ifdef MARAUDER_V8
     this->drawFlipperSnifferUI(true);
+    #endif
   });
   this->addNodes(&bluetoothSnifferMenu, "FindMy Sniff", TFTWHITE, BLUETOOTH_SNIFF, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_AIRTAG, TFT_WHITE);
+    #ifdef MARAUDER_V8
     this->drawPassiveBleDetectorUI(true);
+    #endif
   });
   this->addNodes(&bluetoothSnifferMenu, "FindMy Monitor", TFTWHITE, BLUETOOTH_SNIFF, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_AIRTAG_MON, TFT_WHITE);
+    #ifdef MARAUDER_V8
     this->drawPassiveBleDetectorUI(true);
+    #endif
   });
   this->addNodes(&bluetoothSnifferMenu, text_table1[35], TFTMAGENTA, CC_SKIMMERS, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_SKIMMERS, TFT_MAGENTA);
+    #ifdef MARAUDER_V8
     this->drawCardSkimmerUI(true);
+    #endif
   });
   this->addNodes(&bluetoothSnifferMenu, "Bluetooth Analyzer", TFTCYAN, PACKET_MONITOR, [this]() {
     display_obj.clearScreen();
@@ -12069,13 +12229,17 @@ void MenuFunctions::RunSetup()
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_FLOCK, TFT_ORANGE);
+    #ifdef MARAUDER_V8
     this->drawPassiveBleDetectorUI(true);
+    #endif
   });
   this->addNodes(&bluetoothSnifferMenu, "Meta Detect", TFTWHITE, BLUETOOTH_SNIFF, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_SCAN_RAYBAN, TFT_CYAN);
+    #ifdef MARAUDER_V8
     this->drawPassiveBleDetectorUI(true);
+    #endif
   });
   this->addNodes(&bluetoothSnifferMenu, "Fox Hunt", TFTCYAN, SCANNERS, [this]() {
     foxHuntMenu.list->clear();
@@ -12110,7 +12274,9 @@ void MenuFunctions::RunSetup()
           display_obj.clearScreen();
           this->drawStatusBar();
           wifi_scan_obj.StartScan(BT_SCAN_FOX_HUNT, TFT_CYAN);
+          #ifdef MARAUDER_V8
           this->drawFoxHuntUI(true);
+          #endif
         });
       }
     }
@@ -12126,43 +12292,57 @@ void MenuFunctions::RunSetup()
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_ATTACK_SOUR_APPLE, TFT_GREEN);
+    #ifdef MARAUDER_V8
     this->drawBleSpamUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAttackMenu, "Apple Juice", TFTYELLOW, DEAUTH_SNIFF, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_ATTACK_APPLE_JUICE, TFT_YELLOW);
+    #ifdef MARAUDER_V8
     this->drawBleSpamUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAttackMenu, "Swiftpair Spam", TFTCYAN, KEYBOARD_ICO, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_ATTACK_SWIFTPAIR_SPAM, TFT_CYAN);
+    #ifdef MARAUDER_V8
     this->drawBleSpamUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAttackMenu, "Samsung BLE Spam", TFTRED, GENERAL_APPS, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_ATTACK_SAMSUNG_SPAM, TFT_RED);
+    #ifdef MARAUDER_V8
     this->drawBleSpamUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAttackMenu, "Google BLE Spam", TFTPURPLE, LANGUAGE, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_ATTACK_GOOGLE_SPAM, TFT_PURPLE);
+    #ifdef MARAUDER_V8
     this->drawBleSpamUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAttackMenu, "Flipper BLE Spam", TFTORANGE, FLIPPER, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_ATTACK_FLIPPER_SPAM, TFT_ORANGE);
+    #ifdef MARAUDER_V8
     this->drawBleSpamUI(true);
+    #endif
   });
   this->addNodes(&bluetoothAttackMenu, "BLE Spam All", TFTMAGENTA, DEAUTH_SNIFF, [this]() {
     display_obj.clearScreen();
     this->drawStatusBar();
     wifi_scan_obj.StartScan(BT_ATTACK_SPAM_ALL, TFT_MAGENTA);
+    #ifdef MARAUDER_V8
     this->drawBleSpamUI(true);
+    #endif
   });
 
 #endif
@@ -12440,7 +12620,9 @@ void MenuFunctions::RunSetup()
         wifi_scan_obj.currentScanMode = WIFI_SCAN_GPS_DATA;
         this->changeMenu(&gpsInfoMenu, true);
         wifi_scan_obj.StartScan(WIFI_SCAN_GPS_DATA, TFT_CYAN);
+        #ifdef MARAUDER_V8
         this->drawGpsDataUI(true);
+        #endif
       });
 
       #ifdef MARAUDER_V8
@@ -12485,9 +12667,17 @@ void MenuFunctions::RunSetup()
         wifi_scan_obj.currentScanMode = GPS_TRACKER;
         this->changeMenu(&gpsInfoMenu, true);
         wifi_scan_obj.StartScan(GPS_TRACKER, TFT_CYAN);
+        #ifdef MARAUDER_V8
         this->drawGpsTrackerUI(true);
+        #endif
       });
 
+
+
+      // Evaware-style direct wardrive entry from GPS menu (WiFi+GPS log path).
+      this->addNodes(&gpsMenu, "Wardrive", TFTLIME, BEACON_SNIFF, [this]() {
+        this->startWifiToolUI(WIFI_SCAN_WAR_DRIVE, TFT_GREEN);
+      });
       this->addNodes(&gpsMenu, "GPS POI", TFTCYAN, GPS_MENU, [this]() {
         wifi_scan_obj.StartScan(GPS_POI, TFT_CYAN);
         wifi_scan_obj.currentScanMode = WIFI_SCAN_OFF;
@@ -12566,7 +12756,9 @@ void MenuFunctions::RunSetup()
                      DRAW,
                      [this, theme]() {
                        sharkThemeSet(theme);
+                       #ifdef MARAUDER_V8
                        this->markActiveTheme();
+                       #endif
                        this->changeMenu(&themeMenu, true);
                      },
                      shark_theme_index == theme);
@@ -13307,7 +13499,9 @@ void MenuFunctions::drawGraph(int16_t *values) {
 void MenuFunctions::renderGraphUI(uint8_t scan_mode) {
   #ifdef MARAUDER_V8
     if (scan_mode == BT_SCAN_ANALYZER) {
+      #ifdef MARAUDER_V8
       this->drawBluetoothAnalyzerUI(true);
+      #endif
       return;
     }
   #endif

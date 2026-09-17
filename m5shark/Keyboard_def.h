@@ -113,7 +113,7 @@ const uint8_t _kb_asciimap[128] = {
     0x1d | SHIFT, // Z
     0x2f,         // [
     0x31,         // bslash
-    0x30,         // ]
+    0x30,         // ] 
     0x23 | SHIFT, // ^
     0x2d | SHIFT, // _
     0x35,         // `
